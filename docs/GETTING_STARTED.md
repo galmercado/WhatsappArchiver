@@ -162,6 +162,7 @@ Use **⋮ → Lock vault** when done, then **Ctrl+C**.
 | `adb not found` | Add `--adb-path "<full path to adb>"` exactly as in Step 6. |
 | `No matching distribution found for sqlcipher3…` | Update pip first: `python3 -m pip install --upgrade pip`, then `pip install -e .` again. If it still fails, run `uname -m && python3 --version && pip --version` and send me the output. |
 | `no Android device found` | Cable/port, screen unlocked, USB mode *File transfer*, USB debugging on (Step 5a). |
+| `adb devices` shows an empty list | (1) On the phone pull down the notification "Charging this device via USB" → tap it → choose **File transfer**. (2) Samsung **Auto Blocker** blocks USB commands: *Settings → Security and privacy → Auto Blocker → off*. (3) Developer options → **Revoke USB debugging authorizations**, switch USB debugging off and on, unplug and replug, tap **Allow**. (4) Try another cable (many are charge-only) and a different USB port. (5) Linux: `adb kill-server && adb start-server && adb devices`. (6) Still empty: use wireless debugging, see below. |
 | `device is unauthorized` | Unlock the phone and tap **Allow** on the "USB debugging" popup. |
 | `No WhatsApp data found` or "no database found" | Do Step 5b again and press **Back up**; then retry. |
 | `decryption failed: wrong key, corrupt file or unsupported format` | Re-check the 64 digits (no spaces/typos). If it is still wrong, the backup format may differ from what the tool expects: copy the error text and send it to me (do **not** send the backup file or the key). |
@@ -171,3 +172,12 @@ Use **⋮ → Lock vault** when done, then **Ctrl+C**.
 | Forgot the vault passphrase | It cannot be recovered. Delete the `archive` folder and redo Step 6 with a new one. |
 
 To start completely over: delete the `archive` folder and the `local-auth` folder.
+
+## Phone not showing up in `adb devices`: wireless fallback (Android 11+, no cable needed)
+
+1. Put the phone and the computer on the **same Wi-Fi**.
+2. Phone: *Settings → Developer options → Wireless debugging → on* → tap **Pair device with pairing code**. It shows an address like `192.168.1.20:37099` and a 6-digit code.
+3. Computer: `adb pair 192.168.1.20:37099` and type the 6-digit code.
+4. Back on the *Wireless debugging* screen note the **IP address & Port** (a different port, e.g. `192.168.1.20:41555`), then: `adb connect 192.168.1.20:41555`
+5. `adb devices` should now list `192.168.1.20:41555  device`. Continue with Step 6 as normal
+   (if several devices are listed, add `--serial 192.168.1.20:41555` to the `extract_and_ingest.py` command).
