@@ -36,6 +36,7 @@ class MediaOut(BaseModel):
     duration_s: int | None
     width: int | None
     height: int | None
+    file_name: str | None
     available: bool
     url: str | None
 

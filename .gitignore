@@ -13,3 +13,8 @@ archive/
 *.kdf.json
 .env
 *.egg-info/
+
+# web
+web/dist/
+web/test-results/
+web/playwright-report/

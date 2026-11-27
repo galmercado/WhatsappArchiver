@@ -246,3 +246,30 @@ def test_search_rejects_empty_symbol_only_and_overlong(ready: Env) -> None:
 def test_search_no_wildcard_dos_amplification(ready: Env) -> None:
     r = search(ready, "a* b* c* d* e* f* g* h* i* j*")
     assert r.status_code == 200 and len(r.json()["terms"]) <= 8
+
+
+def test_media_file_name_exposed_only_when_available(ready: Env) -> None:
+    msgs = {
+        m["id"]: m
+        for m in ready.client.get("/api/chats/1/messages", params={"limit": 100}).json()["items"]
+    }
+    assert (
+        msgs[14]["media"]["file_name"] == "report.pdf"
+        and msgs[12]["media"]["file_name"] == "IMG-0001.jpg"
+    )
+    assert msgs[16]["media"]["file_name"] is None  # hostile path row: nothing to show
+
+
+def test_search_plan_is_driven_by_the_fts_index(ready: Env) -> None:
+    """Regression: SQLite once scanned `message` by date and probed FTS per row (11 s on 100k rows)."""
+    from waarchive.server import queries as Q
+
+    sql = Q.search_sql(["message_fts MATCH ?", "m.chat_id = ?"])
+    with ready.ctx.vault.db() as db:
+        plan = [
+            str(r[3])
+            for r in db.execute("EXPLAIN QUERY PLAN " + sql, ('"hello"*', 1, 11)).fetchall()
+        ]
+    fts = next(i for i, p in enumerate(plan) if "message_fts" in p)
+    msg = next(i for i, p in enumerate(plan) if p.startswith(("SEARCH m ", "SCAN m ")))
+    assert fts < msg, plan  # FTS enumerates matches first; `message` is only probed by rowid

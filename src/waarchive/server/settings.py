@@ -28,6 +28,7 @@ class Settings(BaseModel):
     host: str = "127.0.0.1"
     port: int = 8000
     trust_proxy: bool = False
+    static_dir: Path | None = None
     cookie_secure: bool = False
 
     session_idle_s: int = 900
@@ -129,6 +130,7 @@ class Settings(BaseModel):
         for key, name in (
             ("base_url", "BASE_URL"),
             ("host", "HOST"),
+            ("static_dir", "STATIC_DIR"),
             ("google_client_id", "GOOGLE_CLIENT_ID"),
             ("google_client_secret", "GOOGLE_CLIENT_SECRET"),
             ("google_allowed_email", "GOOGLE_ALLOWED_EMAIL"),

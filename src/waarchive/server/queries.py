@@ -163,7 +163,7 @@ def get_chat(conn: DBConnection, chat_id: int) -> ChatDetail | None:
 _MSG_SQL = (
     "SELECT m.id, m.chat_id, m.sender_jid, m.from_me, m.ts, m.type, m.status, m.text, "
     "m.system_kind, m.system_target_jid, m.quoted_id, "
-    "mm.mime, mm.size_bytes, mm.duration_s, mm.width, mm.height, mm.stored, mm.message_id, "
+    "mm.mime, mm.size_bytes, mm.duration_s, mm.width, mm.height, mm.stored, mm.message_id, mm.rel_path, "
     "q.quoted_text, q.quoted_sender_jid, q.quoted_type, "
     "sc.display_name, sc.phone, p.color_idx, tc.display_name, tc.phone, qc.display_name, qc.phone "
     "FROM message m "
@@ -176,14 +176,22 @@ _MSG_SQL = (
 )
 
 
+def _safe_name(rel: str | None) -> str | None:
+    if not rel:
+        return None
+    name = re.sub(r"[^\w.\- ()]", "_", rel.rsplit("/", 1)[-1])[:120]
+    return name or None
+
+
 def _msg_out(r: tuple[Any, ...]) -> MessageOut:
     (mid, cid, sender, from_me, ts, mtype, status, text, skind, starget, quoted_id,
-     mime, size, dur, w, h, stored, has_media, qtext, qsender, qtype,
+     mime, size, dur, w, h, stored, has_media, rel_path, qtext, qsender, qtype,
      sdn, sph, color, tdn, tph, qdn, qph) = r  # fmt: skip
     media = None
     if has_media is not None:
         media = MediaOut(
             mime=mime, size_bytes=size, duration_s=dur, width=w, height=h,
+            file_name=_safe_name(rel_path) if stored else None,
             available=bool(stored), url=f"/api/media/{mid}" if stored else None,
         )  # fmt: skip
     quoted = None
@@ -293,6 +301,18 @@ def make_snippet(text: str, terms: list[str], width: int = 200) -> str:
     return ("…" if start > 0 else "") + snip + ("…" if start + width < len(text) else "")
 
 
+def search_sql(where: list[str]) -> str:
+    """Constant SQL fragments only; every value is bound by the caller."""
+    return (
+        "SELECT m.id, m.chat_id, m.ts, m.from_me, m.type, m.text, c.subject, cc.display_name, cc.phone, "  # noqa: S608
+        "cc.is_group, c.jid, sc.display_name, sc.phone, m.sender_jid "
+        "FROM message_fts CROSS JOIN message m ON m.id = message_fts.rowid "  # CROSS JOIN pins the FTS index as the driver
+        "JOIN chat c ON c.id = m.chat_id JOIN contact cc ON cc.jid = c.jid "
+        "LEFT JOIN contact sc ON sc.jid = m.sender_jid "
+        f"WHERE {' AND '.join(where)} ORDER BY m.ts DESC, m.id DESC LIMIT ?"  # nosec B608
+    )
+
+
 def search(
     conn: DBConnection, q: str, *, chat_id: int | None, cursor: str | None, limit: int
 ) -> SearchPage:
@@ -306,14 +326,7 @@ def search(
         ts, mid = dec_cursor(cursor)
         where.append("(m.ts < ? OR (m.ts = ? AND m.id < ?))")
         args += [ts, ts, mid]
-    sql = (
-        "SELECT m.id, m.chat_id, m.ts, m.from_me, m.type, m.text, c.subject, cc.display_name, cc.phone, "  # noqa: S608
-        "cc.is_group, c.jid, sc.display_name, sc.phone, m.sender_jid "
-        "FROM message_fts JOIN message m ON m.id = message_fts.rowid "
-        "JOIN chat c ON c.id = m.chat_id JOIN contact cc ON cc.jid = c.jid "
-        "LEFT JOIN contact sc ON sc.jid = m.sender_jid "
-        f"WHERE {' AND '.join(where)} ORDER BY m.ts DESC, m.id DESC LIMIT ?"  # nosec B608
-    )
+    sql = search_sql(where)
     try:
         rows = conn.execute(sql, [*args, limit + 1]).fetchall()
     except Exception as exc:  # FTS syntax/timeout: never leak engine details

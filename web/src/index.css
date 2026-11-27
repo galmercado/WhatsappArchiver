@@ -1,0 +1,147 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------- WhatsApp Web design tokens (light) ---------- */
+:root {
+  color-scheme: light;
+  --app-bg: #f0f2f5;
+  --app-outer: #d1d7db;
+  --app-band: #00a884;
+  --sidebar-bg: #ffffff;
+  --panel-header-bg: #f0f2f5;
+  --chat-bg: #efeae2;
+  --hover-bg: #f5f6f6;
+  --selected-bg: #f0f2f5;
+  --border: #e9edef;
+  --text-primary: #111b21;
+  --text-secondary: #667781;
+  --icon: #54656f;
+  --accent: #00a884;
+  --accent-strong: #008069;
+  --unread: #25d366;
+  --tick-blue: #53bdeb;
+  --bubble-in: #ffffff;
+  --bubble-out: #d9fdd3;
+  --bubble-meta: #667781;
+  --input-bg: #f0f2f5;
+  --composer: #ffffff;
+  --chip-bg: #ffffff;
+  --chip-text: #54656f;
+  --system-bg: #ffeecd;
+  --system-text: #54656f;
+  --avatar-bg: #dfe5e7;
+  --avatar-fg: #ffffff;
+  --flash: rgba(37, 211, 102, 0.28);
+  --quote-in: #f5f6f6;
+  --quote-out: #cff3c7;
+  --shadow-bubble: 0 1px 0.5px rgba(11, 20, 26, 0.13);
+  --wallpaper-ink: rgba(11, 20, 26, 0.045);
+  --mark: #ffd279;
+  --link: #027eb5;
+  --c0: #1f7aec; --c1: #d63f8f; --c2: #d4560c; --c3: #6d56d9;
+  --c4: #00805f; --c5: #a15b08; --c6: #9b3d63; --c7: #067c7c;
+}
+/* ---------- dark ---------- */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --app-bg: #111b21;
+  --app-outer: #0c1317;
+  --app-band: transparent;
+  --sidebar-bg: #111b21;
+  --panel-header-bg: #202c33;
+  --chat-bg: #0b141a;
+  --hover-bg: #202c33;
+  --selected-bg: #2a3942;
+  --border: #222d34;
+  --text-primary: #e9edef;
+  --text-secondary: #8696a0;
+  --icon: #aebac1;
+  --bubble-in: #202c33;
+  --bubble-out: #005c4b;
+  --bubble-meta: rgba(255, 255, 255, 0.6);
+  --input-bg: #202c33;
+  --composer: #2a3942;
+  --chip-bg: #182229;
+  --chip-text: #8696a0;
+  --system-bg: #182229;
+  --system-text: #ffd279;
+  --avatar-bg: #6a7175;
+  --avatar-fg: #cfd4d6;
+  --link: #53bdeb;
+  --flash: rgba(0, 168, 132, 0.3);
+  --quote-in: #1d282f;
+  --quote-out: #025144;
+  --shadow-bubble: 0 1px 0.5px rgba(11, 20, 26, 0.4);
+  --wallpaper-ink: rgba(255, 255, 255, 0.045);
+  --c0: #53a6fd; --c1: #ff72b6; --c2: #ff9b5c; --c3: #a18cff;
+  --c4: #06cf9c; --c5: #e0a64a; --c6: #e58cae; --c7: #4fd1c5;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --app-bg: #111b21; --app-outer: #0c1317; --app-band: transparent; --sidebar-bg: #111b21;
+    --panel-header-bg: #202c33; --chat-bg: #0b141a; --hover-bg: #202c33; --selected-bg: #2a3942;
+    --border: #222d34; --text-primary: #e9edef; --text-secondary: #8696a0; --icon: #aebac1;
+    --bubble-in: #202c33; --bubble-out: #005c4b; --bubble-meta: rgba(255, 255, 255, 0.6);
+    --input-bg: #202c33; --composer: #2a3942; --chip-bg: #182229; --chip-text: #8696a0; --system-bg: #182229;
+    --system-text: #ffd279; --link: #53bdeb; --avatar-bg: #6a7175; --avatar-fg: #cfd4d6; --flash: rgba(0, 168, 132, 0.3);
+    --quote-in: #1d282f; --quote-out: #025144; --shadow-bubble: 0 1px 0.5px rgba(11, 20, 26, 0.4);
+    --wallpaper-ink: rgba(255, 255, 255, 0.045);
+    --c0: #53a6fd; --c1: #ff72b6; --c2: #ff9b5c; --c3: #a18cff;
+    --c4: #06cf9c; --c5: #e0a64a; --c6: #e58cae; --c7: #4fd1c5;
+  }
+}
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--app-outer);
+  color: var(--text-primary);
+  font-family: "Segoe UI", "Helvetica Neue", Helvetica, "Lucida Grande", Arial, Ubuntu, Cantarell, "Fira Sans", sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+::selection { background: rgba(0, 168, 132, 0.28); }
+
+/* thin WhatsApp-style scrollbars */
+* { scrollbar-width: thin; scrollbar-color: rgba(134, 150, 160, 0.4) transparent; }
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-thumb { background: rgba(134, 150, 160, 0.4); border-radius: 3px; }
+
+/* ---------- app frame: green band + floating window on very wide screens ---------- */
+.app-frame { position: fixed; inset: 0; display: flex; background: var(--app-bg); overflow: hidden; }
+@media (min-width: 1441px) {
+  body { background: var(--app-outer); }
+  body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 127px; background: var(--app-band); }
+  .app-frame { inset: 19px calc((100vw - 1600px) / 2) 19px; box-shadow: 0 6px 18px rgba(11, 20, 26, 0.05), 0 1px 1px rgba(11, 20, 26, 0.1); }
+}
+
+/* ---------- wallpaper (own doodle tile; not a WhatsApp asset) ---------- */
+.wallpaper { background-color: var(--chat-bg); position: relative; }
+.wallpaper::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; background-color: var(--wallpaper-ink);
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg transform='translate(18 20)'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M8 13c2 3 6 3 8 0M9 9v.5M15 9v.5'/%3E%3C/g%3E%3Cg transform='translate(112 14)'%3E%3Cpath d='M12 20s-9-5.500-9-11a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 5.500-9 11-9 11z'/%3E%3C/g%3E%3Cg transform='translate(168 70)'%3E%3Cpath d='M4 4h20v14H12l-6 5v-5H4z'/%3E%3C/g%3E%3Cg transform='translate(40 90)'%3E%3Cpath d='M12 2l3 7 7 .6-5.300 4.700 1.700 7.200L12 17.700 5.600 21.500l1.700-7.200L2 9.600 9 9z'/%3E%3C/g%3E%3Cg transform='translate(120 120)'%3E%3Cpath d='M3 12c3-6 6 6 9 0s6 6 9 0'/%3E%3C/g%3E%3Cg transform='translate(16 160)'%3E%3Crect x='3' y='5' width='18' height='14' rx='3'/%3E%3Ccircle cx='12' cy='12' r='3.500'/%3E%3C/g%3E%3Cg transform='translate(170 170)'%3E%3Cpath d='M5 3v18M5 4h13l-3 4 3 4H5'/%3E%3C/g%3E%3Cg transform='translate(86 188)'%3E%3Cpath d='M12 3v18M3 12h18'/%3E%3C/g%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg transform='translate(18 20)'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M8 13c2 3 6 3 8 0M9 9v.5M15 9v.5'/%3E%3C/g%3E%3Cg transform='translate(112 14)'%3E%3Cpath d='M12 20s-9-5.500-9-11a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 5.500-9 11-9 11z'/%3E%3C/g%3E%3Cg transform='translate(168 70)'%3E%3Cpath d='M4 4h20v14H12l-6 5v-5H4z'/%3E%3C/g%3E%3Cg transform='translate(40 90)'%3E%3Cpath d='M12 2l3 7 7 .6-5.300 4.700 1.700 7.200L12 17.700 5.600 21.500l1.700-7.200L2 9.600 9 9z'/%3E%3C/g%3E%3Cg transform='translate(120 120)'%3E%3Cpath d='M3 12c3-6 6 6 9 0s6 6 9 0'/%3E%3C/g%3E%3Cg transform='translate(16 160)'%3E%3Crect x='3' y='5' width='18' height='14' rx='3'/%3E%3Ccircle cx='12' cy='12' r='3.500'/%3E%3C/g%3E%3Cg transform='translate(170 170)'%3E%3Cpath d='M5 3v18M5 4h13l-3 4 3 4H5'/%3E%3C/g%3E%3Cg transform='translate(86 188)'%3E%3Cpath d='M12 3v18M3 12h18'/%3E%3C/g%3E%3C/svg%3E");
+  -webkit-mask-size: 220px 220px; mask-size: 220px 220px;
+}
+
+/* ---------- bubbles with tails ---------- */
+.bubble { position: relative; box-shadow: var(--shadow-bubble); border-radius: 7.5px; }
+.bubble-in { background: var(--bubble-in); }
+.bubble-out { background: var(--bubble-out); }
+.bubble.tail-in { border-top-left-radius: 0; }
+.bubble.tail-out { border-top-right-radius: 0; }
+.bubble.tail-in::before, .bubble.tail-out::before {
+  content: ""; position: absolute; top: 0; width: 8px; height: 13px;
+}
+.bubble.tail-in::before { left: -8px; background: var(--bubble-in); clip-path: polygon(100% 0, 0 0, 100% 100%); }
+.bubble.tail-out::before { right: -8px; background: var(--bubble-out); clip-path: polygon(0 0, 100% 0, 0 100%); }
+
+mark.hit { background: var(--mark); color: #111b21; border-radius: 2px; padding: 0 1px; }
+.msg-flash { animation: flash 2s ease-out; }
+.pp { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }

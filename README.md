@@ -1,7 +1,7 @@
 # WhatsappArchiver
 
-Self-hosted, zero-trust WhatsApp archive. **Status: Phase 2 (ingest CLI) and Phase 3 (hardened FastAPI backend) complete.**
-Phases 4–5 (React UI, deployment/CI) follow.
+Self-hosted, zero-trust WhatsApp archive. **Status: Phases 2 (ingest CLI), 3 (hardened FastAPI backend) and 4 (WhatsApp-style React UI) complete.**
+Phase 5 (Docker/Caddy, CI workflow, hardening guide) follows.
 
 ## Ingest
 
@@ -52,3 +52,29 @@ API (all require session + unlocked vault; GET unless noted): `/api/chats`, `/ap
 `/api/chats/{id}/messages?before|after|around`, `/api/search?q=&chat_id=`, `/api/media/{message_id}`
 (HTTP Range). Session endpoints: `/auth/status`, `/auth/login` | `/auth/google/start`,
 `/auth/logout`, `POST /vault/unlock`, `POST /vault/lock` (purges keys, ends every session).
+
+## Web UI (`web/`)
+
+React 18 + TypeScript (strict, no `any`) + Tailwind, `react-virtuoso` for virtualized, bidirectional
+infinite scroll. Look and feel follow WhatsApp Web (light/dark palettes, bubble tails, ticks, date
+chips, voice-note player, lightbox, mobile single-pane layout). Icons, wallpaper and logo are original;
+no WhatsApp brand assets are used. Message text is only ever rendered as React text nodes (no HTML).
+
+```bash
+cd web && npm install
+npm run build                                   # -> web/dist
+WA_STATIC_DIR=web/dist python -m waarchive.server   # app + API on one origin (no CORS)
+
+# hot reload: API on :8000 with WA_BASE_URL=http://localhost:5173, then
+npm run dev                                     # http://localhost:5173 (proxies /api /auth /vault)
+```
+
+Checks:
+
+```bash
+npm run typecheck && npm run lint && npm test   # tsc, eslint (+security plugin), Vitest
+npm run test:e2e                                # builds, starts a real server on :8765 with a
+                                                # 100,000-message chat, runs Playwright (Chromium)
+WA_PYTHON=/path/to/venv/bin/python PW_CHROMIUM=/path/to/chrome npm run test:e2e   # if needed
+npm run audit                                   # production dependencies, fails on high+
+```

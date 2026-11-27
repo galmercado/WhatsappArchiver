@@ -7,10 +7,12 @@ import contextlib
 import logging
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
+from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
@@ -33,12 +35,18 @@ CSP = (
 )
 
 
-def _security_headers(resp: Response, settings: Settings) -> None:
+IMMUTABLE = "public, max-age=31536000, immutable"
+
+
+def _security_headers(resp: Response, settings: Settings, path: str = "") -> None:
     h = resp.headers
     h.setdefault("Content-Security-Policy", CSP)
     h["X-Content-Type-Options"] = "nosniff"
-    h["Cache-Control"] = "no-store"
-    h["Pragma"] = "no-cache"
+    if path.startswith("/assets/") and resp.status_code == 200:
+        h["Cache-Control"] = IMMUTABLE  # content-hashed build output only
+    else:
+        h["Cache-Control"] = "no-store"
+        h["Pragma"] = "no-cache"
     h["Referrer-Policy"] = "no-referrer"
     h["X-Frame-Options"] = "DENY"
     h["Cross-Origin-Opener-Policy"] = "same-origin"
@@ -90,6 +98,9 @@ def create_app(
     def healthz() -> dict[str, bool]:
         return {"ok": True}
 
+    if settings.static_dir is not None:
+        _mount_spa(app, settings.static_dir.resolve())
+
     @app.exception_handler(RequestValidationError)
     async def _validation(_r: Request, _e: RequestValidationError) -> JSONResponse:
         # Deliberately omit the default `input` echo: bodies contain passwords/passphrases.
@@ -122,7 +133,7 @@ def create_app(
         except Exception as exc:  # never leak internals
             log.error("unhandled %s", type(exc).__name__)
             resp = JSONResponse({"detail": "internal error"}, status_code=500)
-        _security_headers(resp, settings)
+        _security_headers(resp, settings, request.url.path)
         route = request.scope.get("route")
         log.info(
             "%s %s -> %s (%.0f ms)",
@@ -134,6 +145,34 @@ def create_app(
         return resp
 
     return app
+
+
+API_PREFIXES = {"api", "auth", "vault", "assets", "healthz"}
+
+
+def _mount_spa(app: FastAPI, root: Path) -> None:
+    """Serve the built React app (same origin => no CORS). Unknown paths fall back to index.html."""
+    index = root / "index.html"
+    if (root / "assets").is_dir():
+        app.mount("/assets", StaticFiles(directory=root / "assets"), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def spa(full_path: str) -> FileResponse:
+        if full_path.split("/", 1)[0] in API_PREFIXES:
+            raise HTTPException(404, "not found")
+        if full_path:
+            candidate = root / full_path
+            try:
+                resolved = candidate.resolve()
+                if (
+                    resolved.is_file()
+                    and resolved.is_relative_to(root)
+                    and not candidate.is_symlink()
+                ):
+                    return FileResponse(resolved)
+            except (OSError, ValueError):
+                pass
+        return FileResponse(index)
 
 
 def create_app_from_env() -> FastAPI:
