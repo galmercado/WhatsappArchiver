@@ -68,6 +68,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="if an archive already exists, rebuild it without asking (the old one is kept as a backup folder)",
     )
+    p.add_argument(
+        "--stack-after",
+        type=int,
+        metavar="SECONDS",
+        help="if the program runs this long without finishing, print where it is every SECONDS (for bug reports)",
+    )
     p.add_argument("--verbose", action="store_true", help="debug logging (still PII-scrubbed)")
     return p
 
@@ -182,6 +188,8 @@ def main(argv: Sequence[str] | None = None, *, ui: UI | None = None) -> int:
     args = build_parser().parse_args(argv)
     configure_logging(args.verbose)
     _enable_stack_dump()
+    if args.stack_after:
+        faulthandler.dump_traceback_later(args.stack_after, repeat=True)
     log = logging.getLogger("waarchive")
     ui = ui or TerminalUI()
     passphrase: bytearray | None = None
