@@ -24,6 +24,19 @@ tool creates with your chats (encrypted). **Vault passphrase** = a password *you
 | **Android Platform-Tools** | lets the computer talk to your phone | https://developer.android.com/tools/releases/platform-tools → download for your system → unzip it somewhere easy, e.g. `C:\platform-tools` (Windows) or `~/platform-tools` (Mac/Linux) |
 | **An authenticator app** on your phone | makes the 6-digit login codes | Google Authenticator, Aegis, 2FAS, Microsoft Authenticator... any of them |
 
+**Ubuntu / Debian Linux (including ARM computers such as Raspberry Pi or ARM servers):** do not download
+Platform-Tools from Google; that download only contains Intel programs and will not run on ARM. Install everything
+from the package manager instead:
+
+```bash
+sudo apt update
+sudo apt install -y python3 python3-venv python3-pip adb
+sudo snap install node --classic --channel=22      # Node.js 22 (the apt version is too old)
+```
+
+Then use plain `adb` everywhere below and **leave out** `--adb-path` in Step 6.
+(Check your computer type with `uname -m`: `aarch64` means ARM.)
+
 ## Step 2. Download this project
 
 On the GitHub page of the project: green **Code** button → **Download ZIP** → unzip it. (If you know git:
@@ -98,12 +111,12 @@ go back, open **Developer options** → switch **USB debugging** on.
 
 1. Plug the phone into the computer with a USB cable. On the phone choose **File transfer** if asked.
 2. A popup **"Allow USB debugging?"** appears on the phone → tick *Always allow* → **Allow**.
-3. Test the connection (replace the path with where you unzipped platform-tools):
+3. Test the connection (replace the path with where you unzipped platform-tools; on Ubuntu just type `adb devices`):
 
    Windows: `C:\platform-tools\adb.exe devices`  Mac/Linux: `~/platform-tools/adb devices`
 
    You should see one line ending in `device`. If it says `unauthorized`, look at the phone and tap Allow.
-4. Run the tool (Windows example; Mac/Linux: use `~/platform-tools/adb`):
+4. Run the tool (Windows example; Mac: use `~/platform-tools/adb`; Ubuntu with apt-installed adb: omit `--adb-path` entirely):
 
    ```powershell
    python extract_and_ingest.py --adb-path "C:\platform-tools\adb.exe" --out archive
@@ -147,6 +160,7 @@ Use **⋮ → Lock vault** when done, then **Ctrl+C**.
 | `python` / `pip` not found | Reinstall Python and tick "Add to PATH"; open a **new** terminal. On Mac/Linux use `python3`. |
 | `npm` not found / "Node.js is not installed" | Install Node.js 22 (Step 1), open a **new** terminal, run again. |
 | `adb not found` | Add `--adb-path "<full path to adb>"` exactly as in Step 6. |
+| `No matching distribution found for sqlcipher3…` | Update pip first: `python3 -m pip install --upgrade pip`, then `pip install -e .` again. If it still fails, run `uname -m && python3 --version && pip --version` and send me the output. |
 | `no Android device found` | Cable/port, screen unlocked, USB mode *File transfer*, USB debugging on (Step 5a). |
 | `device is unauthorized` | Unlock the phone and tap **Allow** on the "USB debugging" popup. |
 | `No WhatsApp data found` or "no database found" | Do Step 5b again and press **Back up**; then retry. |
