@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "waarchive"
+version = "0.1.0"
+description = "Self-hosted, zero-trust WhatsApp archive: ADB extraction, decryption and normalization"
+requires-python = ">=3.11"
+dependencies = [
+  "cryptography>=43",
+  "argon2-cffi>=23.1",
+  "sqlcipher3-binary>=0.5.4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-cov", "ruff", "mypy", "bandit", "pip-audit"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q -ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "C4", "PL", "RUF"]
+ignore = ["PLR0913", "PLR0917", "PLR2004", "PLR0912", "PLR0915", "S101", "E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "PLR", "B011", "E501", "E731", "PLC0415", "ARG"]
+
+[tool.mypy]
+strict = true
+files = ["src", "extract_and_ingest.py"]
+mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = ["sqlcipher3", "sqlcipher3.*"]
+ignore_missing_imports = true
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv"]

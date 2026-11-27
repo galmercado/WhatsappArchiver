@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+node_modules/
+# never commit data
+*.db
+*.crypt1[0-9]
+archive/
+*.kdf.json
+.env
