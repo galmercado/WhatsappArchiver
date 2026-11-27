@@ -225,6 +225,7 @@ Use **⋮ → Lock vault** when done, then **Ctrl+C**.
 | "Unlock" says it did not unlock | That is the **vault passphrase** from Step 6, not the login password. |
 | Chats still show numbers instead of names | Run `python enrich_contacts.py --archive archive ...` (Step 6b). If it says the phone did not share the address book, use the `.vcf` export. A name only appears when the number in your address book matches the WhatsApp number. |
 | `Nothing to add: no contact source was readable` | The phone was not found or refused; add `--vcf FILE` or `--avatars FOLDER`, or fix the USB connection first. |
+| It seems stuck (nothing changes for several minutes) | First wait: after copying, **decrypting, indexing and encrypting media** can take minutes on large chats, and FTS indexing at the end has no bar. To see where it is, open a **second terminal** (Linux/Mac) and run `kill -USR1 $(pgrep -f extract_and_ingest)`: the first terminal prints a few lines saying which function it is in (no chat content). Send me those lines. On Windows press **Ctrl+C** once and send the last lines it prints. |
 | Forgot the vault passphrase | It cannot be recovered. Delete the `archive` folder and redo Step 6 with a new one. |
 
 To start completely over: delete the `archive` folder and the `local-auth` folder.

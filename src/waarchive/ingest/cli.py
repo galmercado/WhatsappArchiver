@@ -4,8 +4,10 @@ never argv (argv is visible to other local users via the process list)."""
 from __future__ import annotations
 
 import argparse
+import faulthandler
 import logging
 import os
+import signal
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -166,9 +168,20 @@ def _handle_existing(args: argparse.Namespace, ui: UI) -> _Plan:  # noqa: PLR091
     return _Plan(exit_code=0)
 
 
+def _enable_stack_dump() -> None:
+    """`kill -USR1 <pid>` (Linux/Mac) prints where the program currently is. Source lines only, no data values."""
+    try:
+        faulthandler.enable()
+        if hasattr(signal, "SIGUSR1"):
+            faulthandler.register(signal.SIGUSR1)
+    except (OSError, RuntimeError, ValueError):  # no usable stderr (e.g. some embedded consoles)
+        pass
+
+
 def main(argv: Sequence[str] | None = None, *, ui: UI | None = None) -> int:
     args = build_parser().parse_args(argv)
     configure_logging(args.verbose)
+    _enable_stack_dump()
     log = logging.getLogger("waarchive")
     ui = ui or TerminalUI()
     passphrase: bytearray | None = None

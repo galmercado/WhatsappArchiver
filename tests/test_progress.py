@@ -113,3 +113,40 @@ def test_pipeline_reports_copy_decrypt_and_index_progress(
     idx = [b for b in ui.bars if b[0] == "Indexing messages"]
     assert idx[-1][1] == idx[-1][2] == len(gen.MODERN_MESSAGES) + 0 or idx[-1][1] == idx[-1][2]
     assert idx[-1][3] == "items" and ui.bars_ended >= 4
+
+
+def test_finished_copy_bars_end_at_100_percent_even_though_du_rounds_up(
+    tmp_path: Path, device_fs: dict[str, bytes]
+) -> None:
+    """Regression: 'Copying contacts backup' stayed drawn at 0% because the last reading was just under du's rounded total."""
+    ui = ScriptedUI(answers=["1"], secrets=[gen.ROOT_KEY_HEX])
+    cfg = IngestConfig(
+        out_dir=tmp_path / "out", kdf_overrides={"time_cost": 1, "memory_kib": 8, "parallelism": 1}
+    )
+    Pipeline(ADBClient(FakeADBRunner(fs=device_fs)), ui, SQLCipherProvider(), cfg).run(
+        bytearray(b"correct horse battery")
+    )
+    for label in (
+        "Copying chat backup",
+        "Copying contacts backup",
+        "Copying photos, videos, voice notes",
+    ):
+        last = [b for b in ui.bars if b[0] == label][-1]
+        assert last[2] and last[1] == last[2], label
+    said = "\n".join(ui.said)
+    for phase in ("Backup decrypted.", "Creating the encrypted archive", "Reading your chats"):
+        assert phase in said  # every quiet phase announces itself
+
+
+def test_stack_dump_signal_is_registered_without_stopping_the_program() -> None:
+    import faulthandler
+    import os
+    import signal
+
+    from waarchive.ingest import cli
+
+    if not hasattr(signal, "SIGUSR1"):
+        pytest.skip("no SIGUSR1 on this platform")
+    cli._enable_stack_dump()
+    assert faulthandler.is_enabled()
+    os.kill(os.getpid(), signal.SIGUSR1)  # would terminate the process if it were not handled

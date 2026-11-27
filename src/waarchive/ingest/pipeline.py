@@ -23,7 +23,7 @@ from .crypt import (
 )
 from .device import ADBClient, Device, DeviceError, private_files
 from .normalize import IngestStats, Normalizer, open_source_ro
-from .progress import DirWatcher
+from .progress import DirWatcher, dir_size
 from .ui import UI, UNROOTED_ALERT
 
 log = logging.getLogger(__name__)
@@ -133,6 +133,8 @@ class Pipeline:
         self.ui.progress(label, 0, total)
         with DirWatcher(local, lambda n: self.ui.progress(label, n, total)):
             ok = adb.pull(serial, remote, local)
+        # `du` rounds up to disk blocks, so the last real reading is a hair under the total: show the finished state
+        self.ui.progress(label, total if (ok and total) else dir_size(local), total)
         self.ui.progress_end()
         return ok
 
@@ -200,6 +202,7 @@ class Pipeline:
                     self.ui.say("No contacts database available: showing formatted phone numbers.")
                 if not _is_sqlite(msgstore_plain):
                     raise DecryptFailure("message database is not a valid SQLite file")
+                self.ui.say("Backup decrypted.")
             finally:
                 for k in keys:
                     zeroize(k)
@@ -331,6 +334,7 @@ class Pipeline:
         phonebook: tuple[PhonebookIndex, Callable[[PhonebookEntry], bytes | None] | None]
         | None = None,
     ) -> IngestStats:
+        self.ui.say("Creating the encrypted archive (deriving your keys takes a few seconds)...")
         params = KdfParams.fresh(**(self.cfg.kdf_overrides or {}))
         master = derive_master(passphrase, params)
         try:
@@ -340,6 +344,7 @@ class Pipeline:
             )
             write_params(self.cfg.out_dir / "archive.kdf.json", params)
             dst = self.provider.create(out, db_key)
+            self.ui.say("Reading your chats...")
             src = open_source_ro(msgstore)
             wa_conn: sqlite3.Connection | None = (
                 open_source_ro(wa) if wa and _is_sqlite(wa) else None
