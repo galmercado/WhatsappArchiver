@@ -30,6 +30,10 @@ class MediaPathError(Exception):
     pass
 
 
+class VaultClosedError(Exception):
+    pass
+
+
 def validate_rel_path(rel: str) -> str:
     """Reject anything that is not a clean, relative, forward-slash path."""
     if not rel or len(rel) > 1024 or "\x00" in rel or "\\" in rel:
@@ -66,13 +70,23 @@ class MediaVault:
         if len(key) != 32 or len(name_key) != 32:
             raise ValueError("vault keys must be 32 bytes")
         self._root = root
-        self._key = key
-        self._name_key = name_key
+        self._key: bytes | None = key
+        self._name_key: bytes | None = name_key
         root.mkdir(parents=True, exist_ok=True, mode=0o700)
+
+    def close(self) -> None:
+        """Drop key references; in-flight readers stop at their next chunk."""
+        self._key = None
+        self._name_key = None
+
+    def _keys(self) -> tuple[bytes, bytes]:
+        if self._key is None or self._name_key is None:
+            raise VaultClosedError("media vault is locked")
+        return self._key, self._name_key
 
     def blob_path(self, rel: str) -> Path:
         clean = validate_rel_path(rel)
-        h = hmac.new(self._name_key, clean.encode("utf-8"), hashlib.sha256).hexdigest()
+        h = hmac.new(self._keys()[1], clean.encode("utf-8"), hashlib.sha256).hexdigest()
         return self._root / h[:2] / h[2:]
 
     def store(self, rel: str, src: Path) -> int:
@@ -80,7 +94,7 @@ class MediaVault:
         dest = self.blob_path(rel)
         dest.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         nonce = secrets.token_bytes(16)
-        enc = _ctr(self._key, nonce, 0).encryptor()
+        enc = _ctr(self._keys()[0], nonce, 0).encryptor()
         size = 0
         with src.open("rb") as fin, open_private(dest) as fout:
             fout.write(MAGIC + nonce)
@@ -109,11 +123,12 @@ class MediaVault:
                 raise ValueError("corrupt media blob")
             nonce = head[len(MAGIC) :]
             aligned = start - (start % _BLOCK)
-            dec = _ctr(self._key, nonce, aligned).decryptor()
+            dec = _ctr(self._keys()[0], nonce, aligned).decryptor()
             fh.seek(HEADER_LEN + aligned)
             skip = start - aligned
             remaining = end - start + 1
             while remaining > 0:
+                self._keys()  # stop mid-stream if the vault was locked
                 raw = fh.read(min(_CHUNK, remaining + skip))
                 if not raw:
                     break

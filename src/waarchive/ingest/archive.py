@@ -72,6 +72,7 @@ class SQLCipherProvider:
 
         uri = f"file:{path.as_posix()}?mode={'ro' if read_only else 'rwc'}"
         conn: DBConnection = sqlcipher3.connect(uri, uri=True)
+        conn.execute("PRAGMA cipher_log_level = NONE")  # no C-library noise on wrong keys
         conn.execute(f"PRAGMA key = \"x'{_hexkey(key)}'\"")  # nosec B608
         conn.execute("PRAGMA cipher_memory_security = ON")
         try:

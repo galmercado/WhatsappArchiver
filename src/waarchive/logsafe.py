@@ -62,3 +62,5 @@ def configure_logging(verbose: bool = False) -> None:
         root.removeHandler(h)
     root.addHandler(handler)
     root.setLevel(logging.DEBUG if verbose else logging.INFO)
+    for noisy in ("httpx", "httpcore", "asyncio"):  # these log full URLs / internals
+        logging.getLogger(noisy).setLevel(logging.WARNING)
