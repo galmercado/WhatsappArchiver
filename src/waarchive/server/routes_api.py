@@ -9,6 +9,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query
 from fastapi.responses import Response, StreamingResponse
 
+from ..ingest.contacts import avatar_rel
 from ..media_vault import VaultClosedError
 from . import queries as Q
 from .context import Ctx, require_session, require_unlocked
@@ -22,6 +23,7 @@ INLINE_MIME = {
     "image/jpeg", "image/png", "image/gif", "image/webp", "video/mp4", "video/3gpp", "video/webm",
     "audio/ogg", "audio/opus", "audio/mpeg", "audio/mp4", "audio/aac", "audio/amr", "audio/x-m4a",
 }  # fmt: skip
+AVATAR_MIME = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 MEDIA_CSP = "default-src 'none'; sandbox; frame-ancestors 'none'"
 _RANGE_RE = re.compile(r"^bytes=(\d*)-(\d*)$")
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]")
@@ -106,6 +108,22 @@ def api_router() -> APIRouter:
                 return Q.search(db, q, chat_id=chat_id, cursor=cursor, limit=limit)
         except Q.BadQueryError as exc:
             raise HTTPException(400, str(exc)) from None
+
+    @r.get("/api/avatars/{contact_id:int}")
+    def avatar(contact_id: ID, ctx: Ctx) -> Response:
+        try:
+            with ctx.vault.db() as db:
+                rec = Q.avatar_record(db, contact_id)
+            if rec is None or rec[1] not in AVATAR_MIME:
+                raise HTTPException(404, "not found")
+            data = ctx.vault.media.read_all(avatar_rel(rec[0]))
+        except (FileNotFoundError, VaultClosedError, VaultLockedError, ValueError):
+            raise HTTPException(404, "not found") from None
+        return Response(
+            content=data,
+            media_type=rec[1],
+            headers={"Content-Security-Policy": MEDIA_CSP, "Content-Disposition": "inline"},
+        )
 
     @r.get("/api/media/{message_id:int}")
     def media(

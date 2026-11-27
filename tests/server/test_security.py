@@ -36,7 +36,7 @@ def test_every_non_public_route_rejects_anonymous(
             )
             assert r.status_code == 401, (method, path, r.status_code)
             checked += 1
-    assert checked == 8  # chats, chat, messages, search, media, logout, unlock, lock
+    assert checked == 9  # chats, chat, messages, search, media, avatar, logout, unlock, lock
 
 
 def test_authenticated_but_locked_returns_423_for_all_data_routes(env: Env) -> None:

@@ -68,6 +68,7 @@ export interface Chat {
   subtitle: string | null;
   is_group: boolean;
   archived: boolean;
+  avatar_url: string | null;
   last_message_ts: number | null;
   last_message: LastMessage | null;
 }

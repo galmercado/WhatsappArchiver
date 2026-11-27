@@ -54,7 +54,10 @@ This archive holds other people's private conversations as well as yours. Treat 
 7. **Container images could not be built in the environment where this was written** (no Docker daemon). Compose files and
    the workflow are validated (`docker compose config`, `actionlint`) and covered by tests, but run
    `docker compose --profile dev up --build` once and let CI go green before trusting the images.
-8. **Dev-only npm advisories** exist for Vite/Vitest (not shipped in the app); CI gates on production dependencies and reports the rest.
+8. **Contact pictures come from your own address book**, not from WhatsApp (whose copies are in private storage). They are
+   stored encrypted in the same vault as media, validated by file signature (JPEG/PNG/GIF/WebP only; SVG and HTML are
+   refused) and served with `nosniff` and a sandboxing CSP.
+9. **Dev-only npm advisories** exist for Vite/Vitest (not shipped in the app); CI gates on production dependencies and reports the rest.
 
 ## If something looks wrong
 

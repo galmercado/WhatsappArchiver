@@ -1,4 +1,4 @@
-import type { SVGProps } from "react";
+import { useState, type SVGProps } from "react";
 
 /** Own icon set (Material-style paths). No WhatsApp brand assets are used. */
 type P = SVGProps<SVGSVGElement> & { size?: number };
@@ -64,15 +64,28 @@ export function Ticks({ status }: { status: number | null }) {
   );
 }
 
-export function Avatar({ group, size = 49, className = "" }: { group: boolean; size?: number; className?: string }) {
+export function Avatar({ group, size = 49, className = "", src = null }: { group: boolean; size?: number; className?: string; src?: string | null }) {
+  const [broken, setBroken] = useState(false);
   const Icon = group ? GroupIcon : PersonIcon;
   return (
     <span
-      className={`inline-flex shrink-0 items-center justify-center rounded-full ${className}`}
+      className={`relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full ${className}`}
       style={{ width: size, height: size, background: "var(--avatar-bg)", color: "var(--avatar-fg)" }}
       aria-hidden="true"
     >
       <Icon size={Math.round(size * 0.66)} />
+      {src && !broken ? (
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          onError={() => setBroken(true)}
+          className="absolute inset-0 h-full w-full object-cover"
+          data-testid="avatar-img"
+        />
+      ) : null}
     </span>
   );
 }

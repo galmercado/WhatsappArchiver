@@ -8,7 +8,8 @@ Self-hosted, zero-trust WhatsApp archive. **Status: all five phases complete** (
 
 ```bash
 python -m venv .venv && . .venv/bin/activate && pip install -e '.[dev]'
-python extract_and_ingest.py --out ./archive            # via ADB (rooted or unrooted flow)
+python extract_and_ingest.py --out ./archive            # via ADB (rooted or unrooted flow); shows progress bars
+python enrich_contacts.py --archive ./archive           # add contact names + pictures to an existing archive
 python extract_and_ingest.py --bundle ./my_export --out ./archive   # offline, no phone
 ```
 

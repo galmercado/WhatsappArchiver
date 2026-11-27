@@ -38,6 +38,17 @@ test.describe("reading a conversation", () => {
     await expect.poll(() => page.getByRole("img", { name: "real photo" }).evaluate((i: HTMLImageElement) => i.naturalWidth)).toBeGreaterThan(0);
   });
 
+  test("contact picture shows in the chat list and the conversation header; others keep the silhouette", async ({ page }) => {
+    await page.goto("/");
+    const alice = page.getByTestId("chat-1").getByTestId("avatar-img");
+    await expect(alice).toHaveAttribute("src", /^\/api\/avatars\/\d+$/);
+    await expect.poll(() => alice.evaluate((i: HTMLImageElement) => i.naturalWidth)).toBeGreaterThan(0);
+    await expect(page.getByTestId("chat-2").getByTestId("avatar-img")).toHaveCount(0); // group: no picture, silhouette stays
+    await page.getByTestId("chat-1").click();
+    const header = page.locator("header").filter({ has: page.getByTestId("chat-title") }).getByTestId("avatar-img");
+    await expect.poll(() => header.evaluate((i: HTMLImageElement) => i.naturalWidth)).toBeGreaterThan(0);
+  });
+
   test("group chat shows participant names and system events", async ({ page }) => {
     await openChat(page, 2);
     await expect(page.getByTestId("chat-title")).toHaveText("Test Group");

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .adb import ADBError, ADBRunner, validate_remote_path, validate_serial
+from .contacts import PhonebookEntry, read_phonebook, read_photo
 
 
 class DeviceError(Exception):
@@ -106,6 +107,22 @@ class ADBClient:
         return [
             ln.strip() for ln in res.stdout.decode("utf-8", "replace").splitlines() if ln.strip()
         ]
+
+    def read_phonebook(self, serial: str) -> list[PhonebookEntry]:
+        return read_phonebook(self._r, serial)
+
+    def read_contact_photo(self, serial: str, contact_id: int) -> bytes | None:
+        return read_photo(self._r, serial, contact_id)
+
+    def remote_size(self, serial: str, remote: str) -> int | None:
+        """Total bytes below a remote path (`du -sk`, rounded to KB); None if the phone will not say."""
+        validate_serial(serial)
+        validate_remote_path(remote)
+        res = self._r.run(["-s", serial, "shell", "du", "-sk", remote], timeout=600.0)
+        if res.returncode != 0:
+            return None
+        m = re.match(rb"\s*(\d+)", res.stdout)
+        return int(m.group(1)) * 1024 if m else None
 
     def pull(self, serial: str, remote: str, local: Path) -> bool:
         validate_serial(serial)

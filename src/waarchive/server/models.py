@@ -88,6 +88,7 @@ class ChatOut(BaseModel):
     subtitle: str | None
     is_group: bool
     archived: bool
+    avatar_url: str | None
     last_message_ts: int | None
     last_message: LastMessageOut | None
 

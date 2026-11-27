@@ -104,6 +104,16 @@ class MediaVault:
             fout.write(enc.finalize())
         return size
 
+    def store_bytes(self, rel: str, data: bytes) -> int:
+        """Encrypt an in-memory blob (profile pictures) into the vault. Returns plaintext size."""
+        dest = self.blob_path(rel)
+        dest.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        nonce = secrets.token_bytes(16)
+        enc = _ctr(self._keys()[0], nonce, 0).encryptor()
+        with open_private(dest) as fout:
+            fout.write(MAGIC + nonce + enc.update(data) + enc.finalize())
+        return len(data)
+
     def size(self, rel: str) -> int:
         path = self.blob_path(rel)
         if not path.is_file() or path.is_symlink():

@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import sqlite3
+import struct
 import sys
 import zlib
 from pathlib import Path
@@ -215,6 +216,34 @@ CREATE TABLE message(_id INTEGER PRIMARY KEY, chat_row_id INTEGER, from_me INTEG
     c.execute("INSERT INTO jid VALUES(1, ?)", (ALICE,))
     c.execute("INSERT INTO chat VALUES(1, 1)")
     c.executemany("INSERT INTO message VALUES(?,1,?,?)", [(1, 0, 1000), (2, 1, 2000)])
+
+
+def tiny_png(rgb: tuple[int, int, int] = (0, 168, 132), size: int = 8) -> bytes:
+    """A real, decodable PNG (stdlib only)."""
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data))
+
+    rows = b"".join(b"\x00" + bytes(rgb) * size for _ in range(size))
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(rows))
+        + chunk(b"IEND", b"")
+    )
+
+
+def sample_vcf() -> str:
+    """Phonebook export for the fake contacts: Alice (with a photo), Bob, and a stranger."""
+    import base64
+
+    photo = base64.b64encode(tiny_png((200, 30, 30))).decode()
+    return (
+        "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Alice (phonebook)\r\nN:Example;Alice;;;\r\n"
+        "TEL;TYPE=CELL:+1 555 0100 101\r\nPHOTO;ENCODING=b;TYPE=PNG:" + photo + "\r\nEND:VCARD\r\n"
+        "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Bob Phonebook\r\nTEL:(555) 0100-102\r\nEND:VCARD\r\n"
+        "BEGIN:VCARD\r\nVERSION:3.0\r\nFN:Someone Else\r\nTEL:+44 20 7946 0000\r\nEND:VCARD\r\n"
+    )
 
 
 def build_wa_db(path: Path) -> None:

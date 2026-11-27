@@ -25,7 +25,7 @@ function ChatListItemImpl({ chat, selected, onOpen, now }: { chat: Chat; selecte
       onClick={() => onOpen(chat.id)}
       className={`flex h-[72px] w-full items-center gap-[15px] pl-[13px] pr-[15px] text-left ${selected ? "bg-selected" : "hover:bg-hover"}`}
     >
-      <Avatar group={chat.is_group} />
+      <Avatar group={chat.is_group} src={chat.avatar_url} />
       <div className="flex h-full min-w-0 flex-1 flex-col justify-center border-b border-line">
         <div className="flex items-baseline justify-between gap-2">
           <span className="truncate text-list text-ink">{chat.title}</span>

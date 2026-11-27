@@ -104,7 +104,7 @@ export function ChatView({ chatId, anchor, terms, searchOpen, onToggleSearch, on
         <button type="button" aria-label="Back to chats" className="text-icon md:hidden" onClick={onBack}>
           <BackIcon />
         </button>
-        <Avatar group={chat?.is_group ?? false} size={40} />
+        <Avatar group={chat?.is_group ?? false} size={40} src={chat?.avatar_url ?? null} />
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-[16px] leading-5 text-ink" data-testid="chat-title">{chat?.title ?? "…"}</h2>
           <p className="truncate text-[13px] leading-4 text-ink2">{subtitleFor(chat)}</p>

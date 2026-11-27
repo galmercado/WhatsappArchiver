@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import sqlite3
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from ..keys import KdfParams, derive_master, subkey, write_params
 from ..media_vault import MediaVault
 from ..secure_fs import secure_tempdir, zeroize
 from .archive import DatabaseProvider
+from .contacts import PhonebookEntry, PhonebookIndex, collect_phonebook, enrich_archive
 from .crypt import (
     SQLITE_MAGIC,
     DecryptError,
@@ -21,6 +23,7 @@ from .crypt import (
 )
 from .device import ADBClient, Device, DeviceError, private_files
 from .normalize import IngestStats, Normalizer, open_source_ro
+from .progress import DirWatcher
 from .ui import UI, UNROOTED_ALERT
 
 log = logging.getLogger(__name__)
@@ -51,6 +54,9 @@ class IngestConfig:
     package: str = "com.whatsapp"
     serial: str | None = None
     bundle: Path | None = None
+    vcf: Path | None = None  # contacts export (.vcf) with names and photos
+    avatars: Path | None = None  # folder of pictures named by phone number
+    use_phonebook: bool = True  # read names/photos from the phone's address book
     kdf_overrides: dict[str, int] | None = None  # tests only: cheap Argon2 costs
 
 
@@ -109,12 +115,26 @@ class Pipeline:
                 zeroize(raw)
         raise UsageError("no valid key supplied")
 
-    def _decrypt_with(self, src: Path, dest: Path, keys: list[bytearray]) -> bool:
+    def _decrypt_with(
+        self, src: Path, dest: Path, keys: list[bytearray], label: str = "Decrypting"
+    ) -> bool:
         try:
-            decrypt_backup(src, dest, keys)
+            decrypt_backup(src, dest, keys, on_progress=lambda d, t: self.ui.progress(label, d, t))
             return True
         except DecryptError:
             return False
+        finally:
+            self.ui.progress_end()
+
+    def _pull(self, serial: str, remote: str, local: Path, label: str) -> bool:
+        """adb pull with a live progress bar (the bytes that have landed locally vs. the size on the phone)."""
+        adb = self._adb()
+        total = adb.remote_size(serial, remote)
+        self.ui.progress(label, 0, total)
+        with DirWatcher(local, lambda n: self.ui.progress(label, n, total)):
+            ok = adb.pull(serial, remote, local)
+        self.ui.progress_end()
+        return ok
 
     # --------------------------------------------------------------------- main
     def run(self, passphrase: bytearray) -> IngestResult:
@@ -135,6 +155,7 @@ class Pipeline:
 
         with secure_tempdir() as tmp:
             media_root: Path | None = None
+            serial: str | None = None
             rooted = False
             keys: list[bytearray] = []
             msgstore_plain: Path | None = None
@@ -144,6 +165,7 @@ class Pipeline:
             try:
                 if self.adb is not None:
                     dev = self._device()
+                    serial = dev.serial
                     rooted = self.adb.is_rooted(dev.serial)
                     if rooted:
                         self.ui.say("Device is rooted: extracting private WhatsApp files.")
@@ -162,7 +184,9 @@ class Pipeline:
                     if not keys:
                         raise DecryptFailure("no decryption key available")
                     msgstore_plain = tmp / "msgstore.db"
-                    if not self._decrypt_with(msgstore_crypt, msgstore_plain, keys):
+                    if not self._decrypt_with(
+                        msgstore_crypt, msgstore_plain, keys, "Decrypting chat backup"
+                    ):
                         raise DecryptFailure(
                             "decryption failed: wrong key, corrupt file or unsupported format"
                         )
@@ -180,8 +204,16 @@ class Pipeline:
                 for k in keys:
                     zeroize(k)
 
+            phonebook = collect_phonebook(
+                self.adb,
+                serial,
+                vcf=self.cfg.vcf,
+                avatars=self.cfg.avatars,
+                use_phone=self.cfg.use_phonebook,
+                say=self.ui.say,
+            )
             stats = self._build_archive(
-                passphrase, msgstore_plain, wa_plain, media_root, archive_path
+                passphrase, msgstore_plain, wa_plain, media_root, archive_path, phonebook
             )
         return IngestResult(stats, rooted, archive_path)
 
@@ -222,7 +254,11 @@ class Pipeline:
             return None
         dest = tmp / "media_pull"
         dest.mkdir(mode=0o700)
-        return dest if adb.pull(serial, layout.media_dir, dest) else None
+        return (
+            dest
+            if self._pull(serial, layout.media_dir, dest, "Copying photos, videos, voice notes")
+            else None
+        )
 
     def _pull_shared(self, serial: str, tmp: Path) -> tuple[Path | None, Path | None, Path | None]:
         adb = self._adb()
@@ -235,18 +271,24 @@ class Pipeline:
         if layout.msgstore_backups:
             remote = layout.msgstore_backups[0]
             ms = tmp / ("pulled_" + remote.rsplit("/", 1)[-1])
-            ok = adb.pull(serial, remote, ms)
+            ok = self._pull(serial, remote, ms, "Copying chat backup")
             ms = ms if ok and ms.exists() else None
         if layout.wa_backups:
             remote = layout.wa_backups[0]
             wa = tmp / ("pulled_" + remote.rsplit("/", 1)[-1])
-            ok = adb.pull(serial, remote, wa)
+            ok = self._pull(serial, remote, wa, "Copying contacts backup")
             wa = wa if ok and wa.exists() else None
         media: Path | None = None
         if layout.media_dir:
             media = tmp / "media_pull"
             media.mkdir(mode=0o700)
-            media = media if adb.pull(serial, layout.media_dir, media) else None
+            media = (
+                media
+                if self._pull(
+                    serial, layout.media_dir, media, "Copying photos, videos, voice notes"
+                )
+                else None
+            )
         return ms, wa, media
 
     def _unrooted_secrets(
@@ -286,6 +328,8 @@ class Pipeline:
         wa: Path | None,
         media_root: Path | None,
         out: Path,
+        phonebook: tuple[PhonebookIndex, Callable[[PhonebookEntry], bytes | None] | None]
+        | None = None,
     ) -> IngestStats:
         params = KdfParams.fresh(**(self.cfg.kdf_overrides or {}))
         master = derive_master(passphrase, params)
@@ -301,7 +345,31 @@ class Pipeline:
                 open_source_ro(wa) if wa and _is_sqlite(wa) else None
             )
             try:
-                stats = Normalizer(src, dst, wa=wa_conn, media_root=media_root, vault=vault).run()
+                stats = Normalizer(
+                    src,
+                    dst,
+                    wa=wa_conn,
+                    media_root=media_root,
+                    vault=vault,
+                    progress=lambda label, done, total: self.ui.progress(
+                        label, done, total, "items"
+                    ),
+                ).run()
+                self.ui.progress_end()
+                if phonebook is not None and phonebook[0].size:
+                    done = enrich_archive(
+                        dst,
+                        vault,
+                        phonebook[0],
+                        fetch_photo=phonebook[1],
+                        progress=lambda label, d, t: self.ui.progress(label, d, t, "items"),
+                    )
+                    self.ui.progress_end()
+                    stats.names_added, stats.pictures_added = done.named, done.photos
+                    self.ui.say(
+                        f"Contacts: added {done.named} names and {done.photos} pictures "
+                        f"({done.unmatched} of {done.contacts} numbers were not in your address book)."
+                    )
             finally:
                 src.close()
                 if wa_conn:

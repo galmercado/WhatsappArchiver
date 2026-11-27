@@ -18,7 +18,10 @@ class FakeADBRunner:
         rooted: bool = False,
         fs: dict[str, bytes] | None = None,
         su_hangs: bool = False,
+        phonebook: str | None = None,
+        photos: dict[int, bytes] | None = None,
     ) -> None:
+        self.phonebook, self.photos = phonebook, dict(photos or {})
         self.devices = [(SERIAL, "device")] if devices is None else devices
         self.rooted, self.fs, self.su_hangs = rooted, dict(fs or {}), su_hangs
         self.log: list[list[str]] = []
@@ -45,9 +48,31 @@ class FakeADBRunner:
                 if self.rooted:
                     return RunResult(0, b"uid=0(root) gid=0(root)\n")
                 return RunResult(127, b"", b"/system/bin/sh: su: inaccessible or not found")
+            if cmd and cmd[0].startswith(
+                "content query --uri content://com.android.contacts/data/phones"
+            ):
+                if self.phonebook is None:
+                    return RunResult(255, b"", b"Permission Denial: opening provider")
+                return RunResult(0, self.phonebook.encode())
+            if cmd[:2] == ["du", "-sk"]:
+                prefix = cmd[2].rstrip("/") + "/"
+                total = sum(
+                    len(v) for k, v in self.fs.items() if k.startswith(prefix) or k == cmd[2]
+                )
+                return RunResult(0, f"{max(total // 1024, 1)}\t{cmd[2]}\n".encode())
             if cmd[0] == "ls":
                 kids = self._children(cmd[-1])
                 return RunResult(0, "\n".join(kids).encode()) if kids is not None else RunResult(1)
+        if a[:1] == ["exec-out"] and a[1].startswith(
+            "content read --uri content://com.android.contacts/contacts/"
+        ):
+            cid, kind = a[1].rsplit("/", 2)[-2:]
+            data = self.photos.get(int(cid))
+            if data is None or (
+                kind == "display_photo" and int(cid) in getattr(self, "thumb_only", set())
+            ):
+                return RunResult(255, b"", b"No such file")
+            return RunResult(0, data)
         if a[:1] == ["pull"]:
             return self._pull(a[1], Path(a[2]))
         return RunResult(1, b"", b"unsupported in fake")
@@ -87,6 +112,14 @@ class ScriptedUI:
         self.answers, self.secrets = list(answers or []), list(secrets or [])
         self.said: list[str] = []
         self.alerts: list[str] = []
+        self.bars: list[tuple[str, int, int | None, str]] = []
+        self.bars_ended = 0
+
+    def progress(self, label: str, done: int, total: int | None, unit: str = "bytes") -> None:
+        self.bars.append((label, done, total, unit))
+
+    def progress_end(self) -> None:
+        self.bars_ended += 1
 
     def say(self, msg: str) -> None:
         self.said.append(msg)

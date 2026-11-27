@@ -69,13 +69,21 @@ def like_escape(s: str) -> str:
 
 
 # ------------------------------------------------------------------------------- chats
-_CHAT_COLS = (
-    "c.id, c.jid, c.subject, c.last_message_ts, c.archived, ct.display_name, ct.phone, ct.is_group"
-)
+def has_avatars(conn: DBConnection) -> bool:
+    """Archives made before profile pictures existed have no `contact.avatar_mime` column."""
+    return any(r[1] == "avatar_mime" for r in conn.execute("PRAGMA table_info(contact)").fetchall())
+
+
+def _chat_cols(conn: DBConnection) -> str:
+    av = "ct.avatar_mime" if has_avatars(conn) else "NULL"
+    return (
+        "c.id, c.jid, c.subject, c.last_message_ts, c.archived, ct.display_name, ct.phone, ct.is_group, "
+        f"{av}, ct.rowid"
+    )
 
 
 def _chat_out(conn: DBConnection, row: tuple[Any, ...]) -> ChatOut:
-    cid, jid, subject, last_ts, archived, dn, phone, grp = row
+    cid, jid, subject, last_ts, archived, dn, phone, grp, avatar_mime, contact_rowid = row
     last = conn.execute(
         "SELECT text, type, from_me, ts FROM message WHERE chat_id=? ORDER BY ts DESC, id DESC LIMIT 1",
         (cid,),
@@ -87,6 +95,7 @@ def _chat_out(conn: DBConnection, row: tuple[Any, ...]) -> ChatOut:
         subtitle=None if grp else (phone or _local(jid)),
         is_group=bool(grp),
         archived=bool(archived),
+        avatar_url=f"/api/avatars/{contact_rowid}" if avatar_mime else None,
         last_message_ts=last_ts,
         last_message=LastMessageOut(
             text=(last[0] or "")[:120] if last[0] is not None else None,
@@ -125,7 +134,7 @@ def list_chats(
         )
         args += [ts, ts, cid]
     sql = (
-        f"SELECT {_CHAT_COLS} FROM chat c JOIN contact ct ON ct.jid = c.jid "  # noqa: S608  # nosec B608
+        f"SELECT {_chat_cols(conn)} FROM chat c JOIN contact ct ON ct.jid = c.jid "  # noqa: S608  # nosec B608
         f"WHERE {' AND '.join(where)} "
         "ORDER BY coalesce(c.last_message_ts,0) DESC, c.id DESC LIMIT ?"
     )
@@ -139,7 +148,7 @@ def list_chats(
 
 def get_chat(conn: DBConnection, chat_id: int) -> ChatDetail | None:
     row = conn.execute(
-        f"SELECT {_CHAT_COLS} FROM chat c JOIN contact ct ON ct.jid = c.jid WHERE c.id = ?",  # noqa: S608  # nosec B608
+        f"SELECT {_chat_cols(conn)} FROM chat c JOIN contact ct ON ct.jid = c.jid WHERE c.id = ?",  # noqa: S608  # nosec B608
         (chat_id,),
     ).fetchone()
     if row is None:
@@ -354,5 +363,16 @@ def media_record(conn: DBConnection, message_id: int) -> tuple[str, str | None] 
     row = conn.execute(
         "SELECT rel_path, mime FROM message_media WHERE message_id = ? AND stored = 1 AND rel_path IS NOT NULL",
         (message_id,),
+    ).fetchone()
+    return (row[0], row[1]) if row else None
+
+
+def avatar_record(conn: DBConnection, contact_rowid: int) -> tuple[str, str] | None:
+    """(jid, mime) of a stored profile picture; the file path is derived server-side, never from the client."""
+    if not has_avatars(conn):
+        return None
+    row = conn.execute(
+        "SELECT jid, avatar_mime FROM contact WHERE rowid = ? AND avatar_mime IS NOT NULL",
+        (contact_rowid,),
     ).fetchone()
     return (row[0], row[1]) if row else None

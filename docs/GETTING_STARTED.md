@@ -80,8 +80,10 @@ What happens:
 
 1. The first time it builds the web page (about a minute).
 2. It asks you to **choose a login password** (at least 14 characters). Type it twice. Nothing shows while typing; that is normal.
-3. It prints a **setup key** (letters and numbers). In your authenticator app: *Add account → Enter a setup key* → type it
-   (name: anything, type: time-based). The app now shows a 6-digit code that changes every 30 seconds. Press Enter in the terminal.
+3. It shows a **QR code**. In your authenticator app choose **Add account → Scan a QR code** and scan it from the
+   screen. The app now shows a 6-digit code that changes every 30 seconds. Press Enter in the terminal.
+   * QR won't scan? A file `local-auth/authenticator-qr.svg` is created: open it in your browser and scan that instead.
+   * No camera? Choose "Enter a setup key" and type the key printed under the QR code (type: time-based).
 4. Your browser opens at `http://localhost:8000`.
    * **Sign in:** your login password + the current 6-digit code.
    * **Unlock vault:** type the passphrase printed in the terminal (`correct horse battery staple` for the demo).
@@ -134,8 +136,40 @@ go back, open **Developer options** → switch **USB debugging** on.
 
 Now unplug the phone. A folder named **`archive`** exists next to the project. **That folder is your encrypted chat archive; keep it private.**
 
-**What to expect:** because the phone is not rooted, contacts show as **phone numbers instead of names**, and only
-media stored on the phone's shared storage is included.
+**What to expect:** WhatsApp keeps its own contact names and profile pictures in private storage that an unrooted
+phone does not let any computer read. The tool therefore gets **names from your phone's address book** and **pictures
+from the photos saved on those contacts** (see Step 6b). Only media stored on the phone's shared storage is included.
+
+## Step 6b. Contact names and pictures
+
+The copy in Step 6 already tries to read your **phone's address book** over the same USB connection (no root needed).
+It matches every WhatsApp number to a saved contact, so chats show **names** instead of numbers, and it copies the **photo
+saved on that contact** as the chat picture. Check the Step 6 output for a line like
+`Contacts: added 212 names and 87 pictures`.
+
+**Already copied everything and the names are missing? Don't copy again.** Add them to the existing archive:
+
+```bash
+python enrich_contacts.py --archive archive --adb-path "C:\platform-tools\adb.exe"
+```
+(Ubuntu with apt `adb`: leave out `--adb-path`.) It asks for your **vault passphrase** and takes a minute.
+You can run it again any time, for example after adding contacts on the phone.
+
+**If the phone refuses to share the address book** (you will see a message about `.vcf`), export it by hand:
+*Contacts app → ☰ menu → Manage contacts → Import or export contacts → Export → Internal storage*. Copy the `.vcf`
+file to your computer (USB file transfer), then:
+
+```bash
+python enrich_contacts.py --archive archive --no-phonebook --vcf /path/to/contacts.vcf
+```
+A `.vcf` export includes contact photos too.
+
+**Your own pictures:** put images in a folder, named by the phone number with country code (no `+`), for example
+`972501234567.jpg`, `15551234567.png`, then add `--avatars /path/to/folder` to either command above.
+
+**Honest limits:** these are the pictures *you saved on your contacts*, not the profile pictures people set in
+WhatsApp (those are private to the WhatsApp app). Group icons are not available either; groups keep the default group icon.
+Numbers that are not in your address book stay as numbers.
 
 ## Step 7. Open your real chats
 
@@ -169,6 +203,8 @@ Use **⋮ → Lock vault** when done, then **Ctrl+C**.
 | `Port 8000 is already in use` | Add `--port 8001` to `python start_local.py`. |
 | Sign-in says "Invalid credentials" | Use the **current** code (it changes every 30 s); check the computer's clock is correct; wait 30 s between tries (too many tries make it wait longer). |
 | "Unlock" says it did not unlock | That is the **vault passphrase** from Step 6, not the login password. |
+| Chats still show numbers instead of names | Run `python enrich_contacts.py --archive archive ...` (Step 6b). If it says the phone did not share the address book, use the `.vcf` export. A name only appears when the number in your address book matches the WhatsApp number. |
+| `Nothing to add: no contact source was readable` | The phone was not found or refused; add `--vcf FILE` or `--avatars FOLDER`, or fix the USB connection first. |
 | Forgot the vault passphrase | It cannot be recovered. Delete the `archive` folder and redo Step 6 with a new one. |
 
 To start completely over: delete the `archive` folder and the `local-auth` folder.

@@ -20,6 +20,7 @@ import hashlib
 import hmac
 import re
 import zlib
+from collections.abc import Callable
 from pathlib import Path
 
 from cryptography.exceptions import InvalidTag
@@ -129,7 +130,15 @@ def parse_header(head: bytes) -> tuple[bytes, int]:
 
 # ------------------------------------------------------------------------ decrypt
 def _stream_decrypt(
-    src: Path, dest: Path, aes_key: bytes, iv: bytes, tag: bytes, start: int, end: int, max_out: int
+    src: Path,
+    dest: Path,
+    aes_key: bytes,
+    iv: bytes,
+    tag: bytes,
+    start: int,
+    end: int,
+    max_out: int,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> None:
     dec = Cipher(algorithms.AES(aes_key), modes.GCM(iv, tag)).decryptor()
     zd = zlib.decompressobj()
@@ -143,6 +152,8 @@ def _stream_decrypt(
             if not chunk:
                 raise DecryptError("truncated file")
             remaining -= len(chunk)
+            if on_progress:
+                on_progress(end - start - remaining, end - start)
             data = dec.update(chunk)
             if first:
                 first = False
@@ -173,6 +184,7 @@ def decrypt_backup(
     *,
     kind: int | None = None,
     max_output: int = DEFAULT_MAX_OUTPUT,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> None:
     """Decrypt *src* to *dest* (0600). Tries each candidate key; the caller owns/zeroizes keys."""
     if kind is None:
@@ -196,7 +208,7 @@ def decrypt_backup(
                 fh.seek(end)
                 tag = fh.read(16)
             try:
-                _stream_decrypt(src, dest, aes_key, iv, tag, payload, end, max_output)
+                _stream_decrypt(src, dest, aes_key, iv, tag, payload, end, max_output, on_progress)
                 return
             except (InvalidTag, zlib.error, DecryptError):
                 dest.unlink(missing_ok=True)

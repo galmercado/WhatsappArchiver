@@ -20,6 +20,7 @@ from argon2 import PasswordHasher  # noqa: E402
 from archive_factory import FAST_KDF, PASSPHRASE  # noqa: E402
 from fixtures import generate_mock_whatsapp as gen  # noqa: E402
 from waarchive.ingest.archive import SQLCipherProvider  # noqa: E402
+from waarchive.ingest.contacts import PhonebookIndex, enrich_archive, parse_vcf  # noqa: E402
 from waarchive.ingest.normalize import Normalizer, open_source_ro  # noqa: E402
 from waarchive.keys import KdfParams, derive_master, subkey, write_params  # noqa: E402
 from waarchive.media_vault import MediaVault  # noqa: E402
@@ -32,26 +33,9 @@ BIG_CHAT_MESSAGES = 100_000
 BIG_JID = "15550100199@s.whatsapp.net"
 
 
-def tiny_png() -> bytes:
-    """A real 8x8 PNG (stdlib only) so the lightbox has something decodable to show."""
-    import struct
-    import zlib
-
-    def chunk(tag: bytes, data: bytes) -> bytes:
-        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data))
-
-    rows = b"".join(b"\x00" + bytes([0, 168, 132] * 8) for _ in range(8))
-    return (
-        b"\x89PNG\r\n\x1a\n"
-        + chunk(b"IHDR", struct.pack(">IIBBBBB", 8, 8, 8, 2, 0, 0, 0))
-        + chunk(b"IDAT", zlib.compress(rows))
-        + chunk(b"IEND", b"")
-    )
-
-
 def add_photo(paths: dict[str, Path]) -> None:
     rel = "Media/WhatsApp Images/IMG-0002.png"
-    (paths["media"] / rel).write_bytes(tiny_png())
+    (paths["media"] / rel).write_bytes(gen.tiny_png())
     c = sqlite3.connect(paths["msgstore_plain"])
     c.execute(
         "INSERT INTO message VALUES(18, 1, 0, 'KEY0018', 1, 0, 1700001000000, 1, 'real photo')"
@@ -92,6 +76,7 @@ def build_archive(tmp: Path) -> Path:
     vault = MediaVault(out / "media", subkey(master, "media"), subkey(master, "media-name"))
     src, wa = open_source_ro(paths["msgstore_plain"]), open_source_ro(paths["wa_plain"])
     Normalizer(src, dst, wa=wa, media_root=paths["media"], vault=vault).run()
+    enrich_archive(dst, vault, PhonebookIndex(parse_vcf(gen.sample_vcf())))  # Alice gets a picture
     for conn in (src, wa, dst):
         conn.close()
     return out

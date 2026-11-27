@@ -12,7 +12,7 @@ import hashlib
 import logging
 import re
 import sqlite3
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote
@@ -51,6 +51,8 @@ class IngestStats:
     contacts: int = 0
     media_stored: int = 0
     media_missing: int = 0
+    names_added: int = 0
+    pictures_added: int = 0
 
 
 def open_source_ro(path: Path) -> sqlite3.Connection:
@@ -132,7 +134,12 @@ class Normalizer:
         wa: sqlite3.Connection | None = None,
         media_root: Path | None = None,
         vault: MediaVault | None = None,
+        progress: Callable[[str, int, int | None], None] | None = None,
     ) -> None:
+        self.progress = progress
+        self._msg_total: int | None = None
+        self._media_total: int | None = None
+        self._media_seen = 0
         self.src, self.dst, self.wa = src, dst, wa
         self.media_root, self.vault = media_root, vault
         self.stats = IngestStats()
@@ -143,6 +150,7 @@ class Normalizer:
     # ------------------------------------------------------------------ public
     def run(self) -> IngestStats:
         tables = _tables(self.src)
+        self._msg_total = self._count(tables)
         if {"message", "chat", "jid"} <= tables:
             self.stats.schema = "modern"
             self._load_wa_contacts()
@@ -154,7 +162,33 @@ class Normalizer:
         else:
             raise SchemaError("unrecognised msgstore schema")
         self._finish()
+        self._report("Indexing messages", self.stats.messages, self._msg_total, force=True)
+        self._report("Encrypting media", self._media_seen, self._media_total, force=True)
         return self.stats
+
+    def _count(self, tables: set[str]) -> int | None:
+        table = (
+            "message"
+            if {"message", "chat", "jid"} <= tables
+            else "messages"
+            if "messages" in tables
+            else None
+        )
+        if table is None:
+            return None
+        try:
+            self._media_total = (
+                int(self.src.execute("SELECT COUNT(*) FROM message_media").fetchone()[0])
+                if "message_media" in tables
+                else None
+            )
+            return int(self.src.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0])  # noqa: S608  # nosec B608
+        except sqlite3.Error:
+            return None
+
+    def _report(self, label: str, done: int, total: int | None, *, force: bool = False) -> None:
+        if self.progress and (force or done % 500 == 0):
+            self.progress(label, done, total)
 
     # ----------------------------------------------------------------- contacts
     def _load_wa_contacts(self) -> None:
@@ -169,7 +203,11 @@ class Normalizer:
             if not jid or "@" not in jid:
                 continue
             name = _clean(r["dn"], 256) or _clean(r["wn"], 256)
-            self._contacts[jid] = (name or None, _clean(r["num"], 64), 1)
+            self._contacts[jid] = (
+                name or None,
+                _clean(r["num"], 64),
+                1 if _clean(r["dn"], 256) else 2,
+            )
 
     def _ensure_contact(self, jid: str, subject: str | None = None) -> None:
         if jid in self._known_jids:
@@ -181,7 +219,13 @@ class Normalizer:
         phone = None if _is_group(jid) else (number or format_phone(jid))
         self.dst.execute(
             "INSERT OR IGNORE INTO contact(jid, display_name, phone, is_group, source) VALUES(?,?,?,?,?)",
-            (jid, name, phone, int(_is_group(jid)), "wa.db" if from_wa else "derived"),
+            (
+                jid,
+                name,
+                phone,
+                int(_is_group(jid)),
+                {1: "wa.db", 2: "push"}.get(from_wa, "derived"),
+            ),
         )
 
     # ------------------------------------------------------------------- media
@@ -234,12 +278,16 @@ class Normalizer:
             row,
         )
         self.stats.messages += 1
+        self._report("Indexing messages", self.stats.messages, self._msg_total)
 
     def _insert_media(
         self, mid: int, rel: str | None, fallback: str | None, mime: object, size: object,
         dur: object, w: object, h: object,
     ) -> None:  # fmt: skip
         stored = self._store_media(mid, rel, fallback)
+        self._media_seen += 1
+        if self.progress and self._media_seen % 20 == 0:
+            self.progress("Encrypting media", self._media_seen, self._media_total)
         self.dst.execute(
             "INSERT OR REPLACE INTO message_media(message_id, rel_path, mime, size_bytes, duration_s,"
             " width, height, stored) VALUES(?,?,?,?,?,?,?,?)",
@@ -278,6 +326,15 @@ class Normalizer:
             )
             if rid is not None and raw:
                 jid_of[rid] = raw
+
+        if "jid_map" in _tables(src):
+            # Newer WhatsApp stores some people as anonymous `@lid` ids; map them back to their phone JID.
+            for r in _select(src, "jid_map", {"lid": ["lid_row_id"], "phone": ["jid_row_id"]}):
+                lid_id, phone_id = _int(r["lid"]), _int(r["phone"])
+                if lid_id is None or phone_id is None or phone_id not in jid_of:
+                    continue
+                if jid_of.get(lid_id, "").endswith("@lid"):
+                    jid_of[lid_id] = jid_of[phone_id]
 
         chat_jid: dict[int, str] = {}
         for r in _select(

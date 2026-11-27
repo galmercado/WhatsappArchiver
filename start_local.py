@@ -59,14 +59,42 @@ def ensure_auth(
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w") as fh:
             fh.write(value)
-    say(
-        "\nNow add a 6-digit code generator to your phone (Google Authenticator, Aegis, 2FAS, ...):"
-    )
-    say("  open the app > add account > 'Enter a setup key' and type:")
-    say(f"\n      {secret}\n")
-    say("  (name it anything, e.g. 'WhatsApp archive'; type of key: time-based)")
+    show_authenticator_setup(auth_dir, secret, say)
     input("Press Enter once the app shows a 6-digit code that changes every 30 seconds... ")
+    (auth_dir / "authenticator-qr.svg").unlink(
+        missing_ok=True
+    )  # the QR contains the secret: do not keep it
     return hash_file.read_text().strip(), secret
+
+
+def show_authenticator_setup(
+    auth_dir: Path, secret: str, say: Callable[[str], None] = print
+) -> None:
+    """Show a QR code (terminal + SVG file) and the typed key for the authenticator app."""
+    import pyotp  # noqa: PLC0415
+
+    from waarchive import qr  # noqa: PLC0415
+
+    uri = pyotp.TOTP(secret).provisioning_uri(name="archive", issuer_name="WhatsApp Archive")
+    say(
+        "\nNow add the login-code generator to your phone (Google Authenticator, Aegis, 2FAS, ...)."
+    )
+    say("In the app choose  Add account > Scan a QR code,  and scan this:\n")
+    try:
+        m = qr.matrix(uri)
+        say(qr.render_ansi(m) if qr.ansi_ok() else qr.render_plain(m))
+    except (ImportError, UnicodeEncodeError):
+        say("(QR code could not be drawn in this terminal)")
+    svg = auth_dir / "authenticator-qr.svg"
+    try:
+        qr.write_svg(uri, svg)
+        say(
+            f"\nIf the QR above does not scan, open this file in your browser and scan it instead:\n  {svg}"
+        )
+    except (ImportError, OSError):
+        pass
+    say("\nNo camera? Choose 'Enter a setup key' and type this instead (time-based):")
+    say(f"\n      {secret}\n")
 
 
 def ensure_web(root: Path, run: Callable[..., object] = subprocess.run) -> Path:

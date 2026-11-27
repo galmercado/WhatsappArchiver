@@ -13,7 +13,7 @@ export function msg(over: Partial<Message> = {}): Message {
 export function chat(over: Partial<Chat> = {}): Chat {
   return {
     id: 1, jid: "15550100101@s.whatsapp.net", title: "Alice Example", subtitle: "+1 555 0100 101",
-    is_group: false, archived: false, last_message_ts: NOW - 3_600_000,
+    is_group: false, archived: false, avatar_url: null, last_message_ts: NOW - 3_600_000,
     last_message: { text: "see you", type: "text", from_me: false, ts: NOW - 3_600_000 }, ...over,
   };
 }

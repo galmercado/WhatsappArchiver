@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fixtures import generate_mock_whatsapp as gen
 from waarchive.ingest.archive import SQLCipherProvider
+from waarchive.ingest.contacts import PhonebookIndex, enrich_archive, parse_vcf
 from waarchive.ingest.normalize import Normalizer, open_source_ro
 from waarchive.keys import KdfParams, derive_master, subkey, write_params
 from waarchive.media_vault import MediaVault
@@ -25,6 +26,7 @@ def make_archive(tmp: Path) -> Path:
     vault = MediaVault(out / "media", subkey(master, "media"), subkey(master, "media-name"))
     src, wa = open_source_ro(paths["msgstore_plain"]), open_source_ro(paths["wa_plain"])
     Normalizer(src, dst, wa=wa, media_root=paths["media"], vault=vault).run()
+    enrich_archive(dst, vault, PhonebookIndex(parse_vcf(gen.sample_vcf())))  # Alice gets a picture
     for c in (src, wa, dst):
         c.close()
     return out

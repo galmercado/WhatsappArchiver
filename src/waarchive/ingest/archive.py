@@ -12,7 +12,8 @@ DDL = """
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE contact(
   jid TEXT PRIMARY KEY, display_name TEXT, phone TEXT,
-  is_group INTEGER NOT NULL DEFAULT 0, source TEXT NOT NULL DEFAULT 'derived');
+  is_group INTEGER NOT NULL DEFAULT 0, source TEXT NOT NULL DEFAULT 'derived',
+  avatar_mime TEXT);
 CREATE TABLE chat(
   id INTEGER PRIMARY KEY, jid TEXT NOT NULL REFERENCES contact(jid), subject TEXT,
   last_message_ts INTEGER, archived INTEGER NOT NULL DEFAULT 0);

@@ -42,6 +42,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="full path to the adb program (only needed if it is not on your PATH)",
     )
     p.add_argument(
+        "--vcf",
+        type=Path,
+        help="contacts export (.vcf) with names and photos (Contacts app > Export)",
+    )
+    p.add_argument(
+        "--avatars",
+        type=Path,
+        help="folder of profile pictures named by phone number, e.g. 972501234567.jpg",
+    )
+    p.add_argument(
+        "--no-phonebook",
+        action="store_true",
+        help="do not read names/photos from the phone's address book",
+    )
+    p.add_argument(
         "--bundle", type=Path, help="skip ADB: folder with key / msgstore.db / wa.db (offline mode)"
     )
     p.add_argument("--verbose", action="store_true", help="debug logging (still PII-scrubbed)")
@@ -75,7 +90,13 @@ def main(argv: Sequence[str] | None = None, *, ui: UI | None = None) -> int:
         adb_exe = str(args.adb_path) if args.adb_path else None
         adb = None if args.bundle else ADBClient(SubprocessADBRunner(adb_exe))
         cfg = IngestConfig(
-            out_dir=args.out, package=args.package, serial=args.serial, bundle=args.bundle
+            out_dir=args.out,
+            package=args.package,
+            serial=args.serial,
+            bundle=args.bundle,
+            vcf=args.vcf,
+            avatars=args.avatars,
+            use_phonebook=not args.no_phonebook,
         )
         result = Pipeline(adb, ui, SQLCipherProvider(), cfg).run(passphrase)
     except IngestError as exc:
@@ -91,7 +112,8 @@ def main(argv: Sequence[str] | None = None, *, ui: UI | None = None) -> int:
         zeroize(passphrase)
     ui.say(
         f"Done: {result.stats.chats} chats, {result.stats.messages} messages, "
-        f"{result.stats.media_stored} media files. Archive: {result.archive}"
+        f"{result.stats.media_stored} media files, {result.stats.names_added} contact names, "
+        f"{result.stats.pictures_added} pictures. Archive: {result.archive}"
     )
     return 0
 
