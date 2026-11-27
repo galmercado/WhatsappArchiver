@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-cov", "ruff", "mypy", "bandit", "pip-audit"]
+dev = ["pytest>=8", "pytest-cov", "ruff", "mypy", "bandit", "pip-audit", "pyyaml"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

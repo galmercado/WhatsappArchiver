@@ -12,6 +12,7 @@ import pyotp
 from pydantic import BaseModel, ConfigDict, SecretStr, model_validator
 
 LOOPBACK = {"127.0.0.1", "::1", "localhost"}
+WILDCARD = "0.0.0.0"  # noqa: S104  # nosec B104 - accepted only with WA_IN_CONTAINER; port published to 127.0.0.1
 
 
 class ConfigError(Exception):
@@ -29,6 +30,9 @@ class Settings(BaseModel):
     port: int = 8000
     trust_proxy: bool = False
     static_dir: Path | None = None
+    in_container: bool = (
+        False  # dev only: bind 0.0.0.0 *inside* a container whose port is published to 127.0.0.1
+    )
     cookie_secure: bool = False
 
     session_idle_s: int = 900
@@ -76,11 +80,17 @@ class Settings(BaseModel):
         u = urlsplit(self.base_url)
         if u.scheme not in ("http", "https") or not u.hostname or u.path not in ("", "/"):
             raise ValueError("WA_BASE_URL must be a bare http(s) origin")
-        if self.env == "dev" and self.host not in LOOPBACK:
+        if (
+            self.env == "dev"
+            and self.host not in LOOPBACK
+            and not (self.in_container and self.host == WILDCARD)
+        ):
             raise ValueError("dev mode must bind to loopback only")
         if self.env == "prod":
             if u.scheme != "https" or not self.cookie_secure:
                 raise ValueError("prod requires an https WA_BASE_URL and secure cookies")
+            if (u.hostname or "").endswith(".invalid") or u.hostname in LOOPBACK:
+                raise ValueError("set WA_DOMAIN to the real public host name")
         elif u.scheme == "http" and u.hostname not in LOOPBACK:
             raise ValueError("plain http is only allowed for localhost")
         if self.auth_mode == "google":
@@ -108,6 +118,16 @@ class Settings(BaseModel):
         e = environ if environ is not None else os.environ
 
         def g(name: str) -> str | None:
+            """WA_<NAME>, or the contents of the file named by WA_<NAME>_FILE (Docker/K8s secrets)."""
+            path = e.get(f"WA_{name}_FILE")
+            if path:
+                try:
+                    text = Path(path).read_text(encoding="utf-8").strip()
+                except OSError as exc:
+                    raise ConfigError(f"cannot read WA_{name}_FILE") from exc
+                if e.get(f"WA_{name}"):
+                    raise ConfigError(f"set only one of WA_{name} and WA_{name}_FILE")
+                return text or None
             v = e.get(f"WA_{name}")
             return v if v else None
 
@@ -126,6 +146,7 @@ class Settings(BaseModel):
             "auth_mode": mode,
             "cookie_secure": b("COOKIE_SECURE", env == "prod"),
             "trust_proxy": b("TRUST_PROXY", False),
+            "in_container": b("IN_CONTAINER", False),
         }
         for key, name in (
             ("base_url", "BASE_URL"),

@@ -1,0 +1,61 @@
+# Caddy terminates TLS (automatic Let's Encrypt/ZeroSSL) and forwards to the app on an internal network.
+{
+	email {$ACME_EMAIL}
+	servers {
+		protocols h1 h2 h3
+	}
+}
+
+{$WA_DOMAIN} {
+	# --- headers (the app already sets CSP/nosniff/no-store; these are the transport-level ones) ---
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+		-X-Powered-By
+	}
+
+	# --- only methods the app uses; internal health endpoint is not public ---
+	@badmethod not method GET HEAD POST
+	respond @badmethod 405
+
+	@internal path /healthz
+	respond @internal 404
+
+	# --- small request bodies (the API only accepts tiny JSON) ---
+	request_body {
+		max_size 64KB
+	}
+
+	# Compress only static build output. Never compress API/media responses (BREACH-style attacks).
+	@static path /assets/* /favicon.svg
+	encode @static zstd gzip
+
+	# --- never log what people read or search for: no URIs/query strings, headers, or client IPs ---
+	log {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				request>uri delete
+				request>headers delete
+				request>remote_ip delete
+				request>remote_port delete
+				request>client_ip delete
+			}
+		}
+	}
+
+	reverse_proxy app:8000 {
+		# Replace (not append) so the app only ever sees the address Caddy observed.
+		header_up X-Forwarded-For {remote_host}
+		header_up -X-Real-IP
+		health_uri /healthz
+		health_interval 30s
+		transport http {
+			dial_timeout 5s
+			response_header_timeout 60s
+		}
+	}
+}

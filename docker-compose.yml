@@ -1,0 +1,122 @@
+# Profiles:   dev  -> hot-reload server on 127.0.0.1:${WA_PORT:-8000}
+#             prod -> app (no published ports) + Caddy (automatic TLS)
+#             tunnel / tailscale -> private remote access instead of Caddy (see docs/DEPLOYMENT.md)
+# Pick the auth mode via COMPOSE_FILE (see .env.example):
+#   docker-compose.yml:docker-compose.password.yml   (Argon2id + TOTP)
+#   docker-compose.yml:docker-compose.google.yml     (Google OAuth)
+name: wa-archive
+
+x-app: &app
+  restart: unless-stopped
+  user: "10001:10001"
+  read_only: true
+  tmpfs: ["/tmp:size=16m,noexec,nosuid,nodev"]
+  cap_drop: ["ALL"]
+  security_opt: ["no-new-privileges:true"]
+  pids_limit: 256
+  mem_limit: 1g
+  volumes:
+    # The server only ever reads the archive: mount it read-only.
+    - ${WA_ARCHIVE_PATH:-./archive}:/data:ro
+  environment: &app-env
+    WA_ARCHIVE_DIR: /data
+    WA_AUTH_MODE: ${WA_AUTH_MODE:?set WA_AUTH_MODE to password_totp or google}
+    WA_PORT: "8000"
+    WA_HOST: 0.0.0.0
+
+services:
+  app-dev:
+    <<: *app
+    profiles: ["dev"]
+    build: { context: ., target: dev }
+    image: wa-archive:dev
+    ports:
+      - "127.0.0.1:${WA_PORT:-8000}:8000" # loopback only: never reachable from the LAN
+    volumes:
+      - ${WA_ARCHIVE_PATH:-./archive}:/data:ro
+      - ./src:/app/src:ro # hot reload
+    environment:
+      <<: *app-env
+      WA_ENV: dev
+      WA_IN_CONTAINER: "1"
+      WA_BASE_URL: http://localhost:${WA_PORT:-8000}
+    networks: [backend, egress]
+
+  app:
+    <<: *app
+    profiles: ["prod", "tunnel", "tailscale"]
+    build: { context: ., target: runtime }
+    image: wa-archive:latest
+    expose: ["8000"] # reachable only from the proxy on the internal network
+    environment:
+      <<: *app-env
+      WA_ENV: prod
+      WA_BASE_URL: https://${WA_DOMAIN:-unset.invalid} # the app refuses to start in prod on an .invalid host
+      WA_COOKIE_SECURE: "true"
+      WA_TRUST_PROXY: "true"
+    networks: [backend]
+
+  caddy:
+    profiles: ["prod"]
+    image: caddy:2.9-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      WA_DOMAIN: ${WA_DOMAIN:-unset.invalid}
+      ACME_EMAIL: ${ACME_EMAIL:-} # empty => Caddy refuses to start (fail closed)
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    cap_drop: ["ALL"]
+    cap_add: ["NET_BIND_SERVICE"]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: ["/tmp:size=16m"]
+    depends_on: { app: { condition: service_healthy } }
+    networks: [public, backend]
+
+  cloudflared:
+    profiles: ["tunnel"]
+    image: cloudflare/cloudflared:2024.12.2
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    depends_on: { app: { condition: service_healthy } }
+    networks: [public, backend]
+
+  tailscale:
+    profiles: ["tailscale"]
+    image: tailscale/tailscale:v1.78.1
+    restart: unless-stopped
+    hostname: ${TS_HOSTNAME:-wa-archive}
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:-} # use an ephemeral, single-use key
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "true"
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - ts_state:/var/lib/tailscale
+      - ./deploy/tailscale-serve.json:/config/serve.json:ro
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    depends_on: { app: { condition: service_healthy } }
+    networks: [public, backend]
+
+networks:
+  public: {}
+  backend:
+    internal: true # no route to the internet: a compromised app cannot phone home
+  egress: {} # only attached by docker-compose.google.yml (needs oauth2.googleapis.com)
+
+volumes:
+  caddy_data: {}
+  caddy_config: {}
+  ts_state: {}

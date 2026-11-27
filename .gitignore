@@ -18,3 +18,8 @@ archive/
 web/dist/
 web/test-results/
 web/playwright-report/
+
+# deployment secrets and local env
+secrets/*
+!secrets/.gitkeep
+.env

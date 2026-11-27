@@ -1,0 +1,15 @@
+# Google OAuth (OpenID Connect + PKCE). Needs outbound HTTPS to Google, so the app joins `egress`.
+# Put the OAuth client secret in secrets/google_client_secret (mode 0600, never committed).
+secrets:
+  wa_google_client_secret: { file: ./secrets/google_client_secret }
+
+services:
+  app-dev: &g
+    secrets: [wa_google_client_secret]
+    environment:
+      WA_GOOGLE_CLIENT_ID: ${WA_GOOGLE_CLIENT_ID:-}
+      WA_GOOGLE_CLIENT_SECRET_FILE: /run/secrets/wa_google_client_secret
+      WA_GOOGLE_ALLOWED_EMAIL: ${WA_GOOGLE_ALLOWED_EMAIL:-}
+      WA_GOOGLE_ALLOWED_SUB: ${WA_GOOGLE_ALLOWED_SUB:-}
+    networks: [backend, egress]
+  app: *g

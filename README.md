@@ -1,7 +1,6 @@
 # WhatsappArchiver
 
-Self-hosted, zero-trust WhatsApp archive. **Status: Phases 2 (ingest CLI), 3 (hardened FastAPI backend) and 4 (WhatsApp-style React UI) complete.**
-Phase 5 (Docker/Caddy, CI workflow, hardening guide) follows.
+Self-hosted, zero-trust WhatsApp archive. **Status: all five phases complete** (ingest CLI, hardened FastAPI backend, WhatsApp-style React UI, Docker/Caddy deployment, CI).
 
 ## Ingest
 
@@ -78,3 +77,18 @@ npm run test:e2e                                # builds, starts a real server o
 WA_PYTHON=/path/to/venv/bin/python PW_CHROMIUM=/path/to/chrome npm run test:e2e   # if needed
 npm run audit                                   # production dependencies, fails on high+
 ```
+
+## Deploy
+
+```bash
+cp .env.example .env            # choose auth mode, domain; create secrets/ files (see docs/DEPLOYMENT.md)
+docker compose --profile dev  up --build     # local: http://localhost:8000, published on 127.0.0.1 only
+docker compose --profile prod up -d --build  # Caddy + automatic TLS; app has no published ports
+docker compose --profile tunnel    up -d --build   # Cloudflare Tunnel instead of Caddy
+docker compose --profile tailscale up -d --build   # Tailscale instead of Caddy
+```
+
+* [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): local debug, production, private remote access, Google OAuth on a real domain, operations.
+* [docs/HARDENING.md](docs/HARDENING.md): guarantees and the tests that prove them, pre-exposure checklist, known limits.
+* CI: `.github/workflows/test-and-security.yml` (ruff, mypy --strict, bandit, pytest + coverage gate, pip-audit,
+  tsc, ESLint + security plugin, Vitest, npm audit, Playwright e2e, image build + Trivy, gitleaks).
