@@ -37,6 +37,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--package", default="com.whatsapp", help="WhatsApp package (com.whatsapp.w4b for Business)"
     )
     p.add_argument(
+        "--adb-path",
+        type=Path,
+        help="full path to the adb program (only needed if it is not on your PATH)",
+    )
+    p.add_argument(
         "--bundle", type=Path, help="skip ADB: folder with key / msgstore.db / wa.db (offline mode)"
     )
     p.add_argument("--verbose", action="store_true", help="debug logging (still PII-scrubbed)")
@@ -67,7 +72,8 @@ def main(argv: Sequence[str] | None = None, *, ui: UI | None = None) -> int:
     try:
         passphrase = _get_passphrase(ui)
         check_passphrase(passphrase)
-        adb = None if args.bundle else ADBClient(SubprocessADBRunner())
+        adb_exe = str(args.adb_path) if args.adb_path else None
+        adb = None if args.bundle else ADBClient(SubprocessADBRunner(adb_exe))
         cfg = IngestConfig(
             out_dir=args.out, package=args.package, serial=args.serial, bundle=args.bundle
         )

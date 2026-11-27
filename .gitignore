@@ -23,3 +23,5 @@ web/playwright-report/
 secrets/*
 !secrets/.gitkeep
 .env
+local-auth/
+demo-archive/

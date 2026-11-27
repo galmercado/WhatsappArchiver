@@ -1,5 +1,7 @@
 # WhatsappArchiver
 
+**New here? Follow [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md): a plain step-by-step tutorial (Windows, Mac, Linux).**
+
 Self-hosted, zero-trust WhatsApp archive. **Status: all five phases complete** (ingest CLI, hardened FastAPI backend, WhatsApp-style React UI, Docker/Caddy deployment, CI).
 
 ## Ingest
