@@ -2,7 +2,7 @@
 # Three stages: `web` builds the SPA, `dev` is the hot-reload image, `runtime` is the hardened prod image.
 # For reproducible builds pin the base images by digest (see docs/HARDENING.md).
 
-FROM node:22-alpine AS web
+FROM node:26-alpine AS web
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund
