@@ -140,6 +140,26 @@ Now unplug the phone. A folder named **`archive`** exists next to the project. *
 phone does not let any computer read. The tool therefore gets **names from your phone's address book** and **pictures
 from the photos saved on those contacts** (see Step 6b). Only media stored on the phone's shared storage is included.
 
+### Running Step 6 again when you already have an archive
+
+The tool never overwrites an archive silently. If the `archive` folder already exists it says so and asks:
+
+```
+What would you like to do?
+  [1] Check what is inside it (asks for your vault passphrase)
+  [2] Add contact names and pictures to it (no need to copy the phone again)
+  [3] Rebuild it from the phone (the old one is kept as a backup folder)
+  [4] Cancel
+```
+
+* **[1]** asks for your **vault passphrase** and prints how many chats, messages, media files, names and pictures it holds.
+* **[2]** is the same as `enrich_contacts.py` in Step 6b.
+* **[3]** copies from the phone again (with the progress bars). It asks for your **existing** vault passphrase so you can keep
+  it (just press Enter to choose a new one instead). The finished new archive replaces the old one, and the old one is kept
+  as `archive.previous-<date-time>`. If anything fails, your old archive is left exactly as it was. It needs enough free disk
+  space for both copies; delete the `.previous` folder when you are happy.
+* In scripts (with `WA_ARCHIVE_PASSPHRASE` set) it refuses to touch an existing archive unless you add `--replace`.
+
 ## Step 6b. Contact names and pictures
 
 The copy in Step 6 already tries to read your **phone's address book** over the same USB connection (no root needed).

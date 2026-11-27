@@ -163,7 +163,8 @@ class Normalizer:
             raise SchemaError("unrecognised msgstore schema")
         self._finish()
         self._report("Indexing messages", self.stats.messages, self._msg_total, force=True)
-        self._report("Encrypting media", self._media_seen, self._media_total, force=True)
+        if self._media_seen:
+            self._report("Encrypting media", self._media_seen, self._media_total, force=True)
         return self.stats
 
     def _count(self, tables: set[str]) -> int | None:
@@ -285,8 +286,11 @@ class Normalizer:
         dur: object, w: object, h: object,
     ) -> None:  # fmt: skip
         stored = self._store_media(mid, rel, fallback)
-        self._media_seen += 1
-        if self.progress and self._media_seen % 20 == 0:
+        if (
+            self.vault and self.media_root
+        ):  # nothing to encrypt in an offline bundle without a media folder
+            self._media_seen += 1
+        if self.progress and self._media_seen and self._media_seen % 20 == 0:
             self.progress("Encrypting media", self._media_seen, self._media_total)
         self.dst.execute(
             "INSERT OR REPLACE INTO message_media(message_id, rel_path, mime, size_bytes, duration_s,"
